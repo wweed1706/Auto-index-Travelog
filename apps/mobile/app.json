@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "ReTrip",
+    "slug": "retrip",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "retrip",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ReTrip chỉ truy cập những ảnh bạn chọn để tổ chức nhật ký du lịch.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

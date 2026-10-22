@@ -1,30 +1,23 @@
 # Mobile application (Expo)
 
-The official Expo scaffold is generated as a dedicated app inside **apps/mobile**.
+The ReTrip mobile project is now present in [mobile](mobile/).
+
+## Run on your development computer
 
 ~~~bash
-# Run from repository root
-cd apps
-npx create-expo-app@latest mobile
-cd mobile
-npx expo start
+cd apps/mobile
+npm install
+npx expo install --check
+npm run typecheck
+npm start
 ~~~
 
-This intentionally uses Expo's generator rather than manually pinning mismatched versions of React Native, Expo, React and Expo Router.
+The project uses Expo SDK 57, React Native, TypeScript, Expo Router, a local photo picker/EXIF preview, and an optional FastAPI health check. Read the [mobile README](mobile/README.md) for LAN connectivity, privacy notes, and known limitations.
 
-## Suggested first screens
+## Development focus
 
-- Auth / Sign in
-- Trip list and trip detail
-- Photo picker and upload progress
-- Indexing status and Unassigned review
-- Timeline, map and event corrections
-- Journal (P1)
-
-## Connectivity
-
-On a real phone, use your computer's reachable LAN IP for the development backend. Never place server-side secrets in EXPO_PUBLIC_* variables; these are exposed in client bundles.
-
-## Before the first mobile PR
-
-Check the selected Expo SDK against the Expo Go version on the target device, test selecting 100+ photos and verify original EXIF/GPS preservation on Android and (if available) iOS. The backend, not the client UI, remains the authoritative source for metadata extraction and indexing.
+- Auth / Trip list and trip detail (not yet implemented)
+- Photo selection preview (implemented); upload, storage and backend EXIF (next)
+- Indexing job status and Unassigned review (not yet implemented)
+- Timeline, map, event corrections (not yet implemented)
+- AI journal (P1; not yet implemented)
