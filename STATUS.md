@@ -5,7 +5,7 @@
 - **Người thực hiện trên nhánh này:** Thành viên 1 (Mobile Application & UX/UI)
 
 ## Tiến độ tổng thể 4 Tuần
-- [ ] **Tuần 1 (24/10 - 31/10):** Khởi tạo `apps/mobile` (Expo SDK 57), chốt kiến trúc UI, dựng khung Navigation và Mock API theo `docs/api-contract.md`.
+- [x] **Tuần 1 (24/10 - 31/10):** Khởi tạo `apps/mobile` (Expo SDK 57), chốt kiến trúc UI, dựng khung Navigation và Mock API theo `docs/api-contract.md`.
 - [ ] **Tuần 2 (01/11 - 07/11):** Xây dựng luồng chọn nhiều ảnh (Photo Picker), giữ nguyên vẹn EXIF khi upload, và màn hình theo dõi tiến trình xử lý.
 - [ ] **Tuần 3 (08/11 - 14/11):** Xây dựng màn hình Timeline + Bản đồ tương tác (Interactive Map), chức năng Human-in-the-Loop (gộp, tách, đổi thứ tự điểm dừng) và màn hình Tìm kiếm ngôn ngữ tự nhiên (Semantic Search).
 - [ ] **Tuần 4 (15/11 - 21/11):** Tích hợp hoàn chỉnh với FastAPI Backend thật, kiểm thử trên thiết bị Android thực tế, đo đạc số liệu Usability và hoàn thiện báo cáo.
@@ -13,11 +13,11 @@
 ## Danh sách Task chi tiết của Thành viên 1 (`apps/mobile`)
 
 ### Giai đoạn 1: Khởi tạo & Khung sườn (Tuần 1)
-- [ ] Khởi tạo ứng dụng Expo SDK 57 với TypeScript bên trong `apps/mobile`.
-- [ ] Cài đặt thư viện điều hướng và bản đồ (`react-native-maps`, `expo-image-picker`, `axios`).
-- [ ] Tạo các định nghĩa kiểu dữ liệu TypeScript (`src/types/trip.ts`) khớp với `docs/api-contract.md`.
-- [ ] Xây dựng bộ Mock Service (`src/services/mockApi.ts`) trả về dữ liệu mẫu của 1 chuyến đi và kết quả tìm kiếm.
-- [ ] Dựng khung điều hướng cho các màn hình cốt lõi:
+- [x] Khởi tạo ứng dụng Expo SDK 57 với TypeScript bên trong `apps/mobile`.
+- [x] Cài đặt thư viện điều hướng và bản đồ (`react-native-maps`, `expo-image-picker`, `axios`).
+- [x] Tạo các định nghĩa kiểu dữ liệu TypeScript (`src/types/trip.ts`) khớp với `docs/api-contract.md`.
+- [x] Xây dựng bộ Mock Service (`src/services/mockApi.ts`) trả về dữ liệu mẫu của 1 chuyến đi và kết quả tìm kiếm.
+- [x] Dựng khung điều hướng cho các màn hình cốt lõi:
   - `AuthScreen` (Đăng nhập/Đăng ký cơ bản)
   - `TripListScreen` (Danh sách chuyến đi)
   - `UploadProgressScreen` (Chọn ảnh hàng loạt & Tiến trình xử lý)
