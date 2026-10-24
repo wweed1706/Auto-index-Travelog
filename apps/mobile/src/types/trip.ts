@@ -21,6 +21,7 @@ export interface TripSummary {
   cover_thumbnail_url?: string | null;
   photo_count?: number;
   stop_count?: number;
+  days_count?: number;
   status?: JobStatus;
 }
 
@@ -84,9 +85,9 @@ export interface TripTimeline {
 }
 
 /**
- * Hành động chỉnh sửa Human-in-the-Loop trên điểm dừng
+ * Hành động chỉnh sửa Human-in-the-Loop trên điểm dừng (UC-10, UC-11)
  */
-export type StopMutateAction = 'MERGE' | 'SPLIT' | 'REORDER' | 'RENAME';
+export type StopMutateAction = 'MERGE' | 'SPLIT' | 'REORDER' | 'RENAME' | 'MOVE_PHOTO';
 
 /**
  * Payload gửi lên PATCH /api/v1/trips/{trip_id}/stops/mutate
@@ -99,6 +100,10 @@ export interface StopMutateRequest {
   split_photo_ids?: string[];
   /** Thứ tự stop_id mới trong ngày (dùng cho action REORDER) */
   ordered_stop_ids?: string[];
+  /** Điểm dừng đích khi di chuyển ảnh lẻ giữa các điểm dừng (UC-11) */
+  target_stop_id?: string;
+  /** Mã bức ảnh cần di chuyển (UC-11) */
+  photo_id?: string;
 }
 
 /**
