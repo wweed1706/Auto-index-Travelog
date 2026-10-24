@@ -250,7 +250,7 @@ export default function TripListScreen() {
           <FlatList
             data={trips}
             keyExtractor={(item) => item.trip_id}
-            ListHeaderComponent={renderHeader}
+            ListHeaderComponent={renderHeader()}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             renderItem={({ item, index }) => (

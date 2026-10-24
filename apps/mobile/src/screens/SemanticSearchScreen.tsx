@@ -331,23 +331,24 @@ export default function SemanticSearchScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {loading ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator size="large" color={Palette.indigo600} />
-          <Text style={styles.loadingStateText}>
-            Đang đối sánh ngữ nghĩa hình ảnh...
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.photo_id}
-          numColumns={2}
-          ListHeaderComponent={renderHeader}
-          columnWrapperStyle={styles.gridColumnWrapper}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
+      <FlatList
+        data={loading ? [] : results}
+        keyExtractor={(item) => item.photo_id}
+        numColumns={2}
+        ListHeaderComponent={renderHeader()}
+        keyboardShouldPersistTaps="handled"
+        columnWrapperStyle={styles.gridColumnWrapper}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color={Palette.indigo600} />
+              <Text style={styles.loadingStateText}>
+                Đang đối sánh ngữ nghĩa hình ảnh...
+              </Text>
+            </View>
+          ) : (
             <View style={styles.emptyCard}>
               <Ionicons name="images-outline" size={38} color={Palette.textMuted} />
               <Text style={styles.emptyTitle}>Chưa tìm thấy bức ảnh phù hợp</Text>
@@ -355,16 +356,16 @@ export default function SemanticSearchScreen() {
                 Hãy thử chọn một gợi ý tiếng Việt ở trên hoặc bỏ bộ lọc chuyến đi.
               </Text>
             </View>
-          }
-          renderItem={({ item, index }) => (
-            <SemanticPhotoCard
-              item={item}
-              index={index}
-              onPress={handleOpenResultTrip}
-            />
-          )}
-        />
-      )}
+          )
+        }
+        renderItem={({ item, index }) => (
+          <SemanticPhotoCard
+            item={item}
+            index={index}
+            onPress={handleOpenResultTrip}
+          />
+        )}
+      />
     </SafeAreaView>
   );
 }
@@ -375,7 +376,7 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.bgPrimary,
   },
   loadingState: {
-    flex: 1,
+    paddingVertical: 48,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.md,
