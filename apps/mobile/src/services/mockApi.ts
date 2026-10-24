@@ -446,20 +446,44 @@ export const MOCK_TRIPS: TripSummary[] = [
     end_date: '2026-10-11',
     cover_thumbnail_url:
       'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1000&q=80',
-    photo_count: 8,
+    photo_count: 11,
     stop_count: 5,
     days_count: 2,
+    status: 'COMPLETED',
+  },
+  {
+    trip_id: 'trip_125',
+    title: 'Di sản Đà Nẵng – Phố cổ Hội An',
+    start_date: '2026-10-14',
+    end_date: '2026-10-16',
+    cover_thumbnail_url:
+      'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1000&q=80',
+    photo_count: 11,
+    stop_count: 5,
+    days_count: 3,
     status: 'COMPLETED',
   },
   {
     trip_id: 'trip_124',
     title: 'Khám phá Đà Lạt Mùa Thu',
     start_date: '2026-10-18',
-    end_date: '2026-10-20',
+    end_date: '2026-10-19',
     cover_thumbnail_url:
       'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1000&q=80',
-    photo_count: 5,
-    stop_count: 3,
+    photo_count: 9,
+    stop_count: 4,
+    days_count: 2,
+    status: 'COMPLETED',
+  },
+  {
+    trip_id: 'trip_126',
+    title: 'Viễn du Đảo Ngọc Phú Quốc',
+    start_date: '2026-10-22',
+    end_date: '2026-10-23',
+    cover_thumbnail_url:
+      'https://images.unsplash.com/photo-1540202404-a2f29016b523?auto=format&fit=crop&w=1000&q=80',
+    photo_count: 8,
+    stop_count: 4,
     days_count: 2,
     status: 'COMPLETED',
   },
@@ -580,6 +604,16 @@ export const INITIAL_MOCK_TIMELINE: TripTimeline = {
               latitude: 10.3245,
               longitude: 107.0831,
             },
+            {
+              photo_id: 'p_105b',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-10T17:20:00+07:00',
+              latitude: 10.32442,
+              longitude: 107.08318,
+            },
           ],
         },
       ],
@@ -610,6 +644,16 @@ export const INITIAL_MOCK_TIMELINE: TripTimeline = {
               latitude: 10.33585,
               longitude: 107.0767,
             },
+            {
+              photo_id: 'p_106b',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-11T08:45:00+07:00',
+              latitude: 10.33579,
+              longitude: 107.07664,
+            },
           ],
         },
         {
@@ -634,6 +678,16 @@ export const INITIAL_MOCK_TIMELINE: TripTimeline = {
               latitude: 10.3412,
               longitude: 107.0725,
             },
+            {
+              photo_id: 'p_108',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-11T12:05:00+07:00',
+              latitude: 10.34126,
+              longitude: 107.07248,
+            },
           ],
         },
       ],
@@ -645,7 +699,7 @@ export const DALAT_MOCK_TIMELINE: TripTimeline = {
   trip_id: 'trip_124',
   title: 'Khám phá Đà Lạt Mùa Thu',
   start_date: '2026-10-18',
-  end_date: '2026-10-20',
+  end_date: '2026-10-19',
   days: [
     {
       day_number: 1,
@@ -683,12 +737,22 @@ export const DALAT_MOCK_TIMELINE: TripTimeline = {
               latitude: 11.8701,
               longitude: 108.5635,
             },
+            {
+              photo_id: 'p_202b',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-18T08:15:00+07:00',
+              latitude: 11.86995,
+              longitude: 108.56335,
+            },
           ],
         },
         {
           stop_id: 'dl_stop_02',
           order_index: 2,
-          name: 'Hồ Tuyền Lâm',
+          name: 'Hồ Tuyền Lâm & Rừng Thông',
           start_time: '2026-10-18T15:00:00+07:00',
           end_time: '2026-10-18T17:30:00+07:00',
           centroid: {
@@ -729,8 +793,8 @@ export const DALAT_MOCK_TIMELINE: TripTimeline = {
           stop_id: 'dl_stop_03',
           order_index: 1,
           name: 'Quảng trường Lâm Viên',
-          start_time: '2026-10-19T09:00:00+07:00',
-          end_time: '2026-10-19T11:00:00+07:00',
+          start_time: '2026-10-19T08:30:00+07:00',
+          end_time: '2026-10-19T10:30:00+07:00',
           centroid: {
             latitude: 11.9404,
             longitude: 108.4451,
@@ -743,9 +807,423 @@ export const DALAT_MOCK_TIMELINE: TripTimeline = {
                 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=600&q=80',
               original_url:
                 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=85',
-              taken_at: '2026-10-19T09:30:00+07:00',
+              taken_at: '2026-10-19T09:10:00+07:00',
               latitude: 11.9404,
               longitude: 108.4451,
+            },
+            {
+              photo_id: 'p_206',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-19T09:50:00+07:00',
+              latitude: 11.94052,
+              longitude: 108.44525,
+            },
+          ],
+        },
+        {
+          stop_id: 'dl_stop_04',
+          order_index: 2,
+          name: 'Ga Cổ Đà Lạt & Tiệm Cà Phê Gỗ',
+          start_time: '2026-10-19T14:20:00+07:00',
+          end_time: '2026-10-19T16:40:00+07:00',
+          centroid: {
+            latitude: 11.9418,
+            longitude: 108.4583,
+          },
+          is_user_confirmed: false,
+          photos: [
+            {
+              photo_id: 'p_207',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-19T14:45:00+07:00',
+              latitude: 11.9418,
+              longitude: 108.4583,
+            },
+            {
+              photo_id: 'p_208',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-19T15:30:00+07:00',
+              latitude: null,
+              longitude: null,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Chuyến đi mẫu 3: Di sản Đà Nẵng – Phố cổ Hội An (3 ngày, 5 điểm dừng, 11 ảnh)
+ */
+export const DANANG_HOIAN_MOCK_TIMELINE: TripTimeline = {
+  trip_id: 'trip_125',
+  title: 'Di sản Đà Nẵng – Phố cổ Hội An',
+  start_date: '2026-10-14',
+  end_date: '2026-10-16',
+  days: [
+    {
+      day_number: 1,
+      date: '2026-10-14',
+      stops: [
+        {
+          stop_id: 'dn_stop_01',
+          order_index: 1,
+          name: 'Bãi biển Mỹ Khê • Đà Nẵng',
+          start_time: '2026-10-14T06:15:00+07:00',
+          end_time: '2026-10-14T08:30:00+07:00',
+          centroid: {
+            latitude: 16.0598,
+            longitude: 108.2465,
+          },
+          is_user_confirmed: true,
+          photos: [
+            {
+              photo_id: 'p_301',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-14T06:30:00+07:00',
+              latitude: 16.0598,
+              longitude: 108.2465,
+            },
+            {
+              photo_id: 'p_302',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-14T07:20:00+07:00',
+              latitude: 16.0601,
+              longitude: 108.2467,
+            },
+          ],
+        },
+        {
+          stop_id: 'dn_stop_02',
+          order_index: 2,
+          name: 'Bán đảo Sơn Trà & Chùa Linh Ứng',
+          start_time: '2026-10-14T14:30:00+07:00',
+          end_time: '2026-10-14T17:15:00+07:00',
+          centroid: {
+            latitude: 16.1003,
+            longitude: 108.2778,
+          },
+          is_user_confirmed: false,
+          photos: [
+            {
+              photo_id: 'p_303',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-14T15:10:00+07:00',
+              latitude: 16.1003,
+              longitude: 108.2778,
+            },
+            {
+              photo_id: 'p_304',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-14T16:40:00+07:00',
+              latitude: 16.1005,
+              longitude: 108.2781,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      day_number: 2,
+      date: '2026-10-15',
+      stops: [
+        {
+          stop_id: 'dn_stop_03',
+          order_index: 1,
+          name: 'Chùa Cầu & Khu Phố Cổ Hội An',
+          start_time: '2026-10-15T15:00:00+07:00',
+          end_time: '2026-10-15T17:45:00+07:00',
+          centroid: {
+            latitude: 15.8771,
+            longitude: 108.326,
+          },
+          is_user_confirmed: true,
+          photos: [
+            {
+              photo_id: 'p_305',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1557750255-c76072a7aad1?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1557750255-c76072a7aad1?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-15T15:40:00+07:00',
+              latitude: 15.8771,
+              longitude: 108.326,
+            },
+            {
+              photo_id: 'p_306',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-15T16:50:00+07:00',
+              latitude: null,
+              longitude: null,
+            },
+          ],
+        },
+        {
+          stop_id: 'dn_stop_04',
+          order_index: 2,
+          name: 'Bến Sông Hoài & Đêm Đèn Lồng',
+          start_time: '2026-10-15T18:30:00+07:00',
+          end_time: '2026-10-15T21:10:00+07:00',
+          centroid: {
+            latitude: 15.8764,
+            longitude: 108.3282,
+          },
+          is_user_confirmed: true,
+          photos: [
+            {
+              photo_id: 'p_307',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-15T19:05:00+07:00',
+              latitude: 15.8764,
+              longitude: 108.3282,
+            },
+            {
+              photo_id: 'p_308',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-15T20:00:00+07:00',
+              latitude: 15.87655,
+              longitude: 108.3284,
+            },
+            {
+              photo_id: 'p_309',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-15T20:45:00+07:00',
+              latitude: 15.8766,
+              longitude: 108.3285,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      day_number: 3,
+      date: '2026-10-16',
+      stops: [
+        {
+          stop_id: 'dn_stop_05',
+          order_index: 1,
+          name: 'Cầu Rồng & Bờ Đông Sông Hàn',
+          start_time: '2026-10-16T09:00:00+07:00',
+          end_time: '2026-10-16T11:30:00+07:00',
+          centroid: {
+            latitude: 16.0611,
+            longitude: 108.2275,
+          },
+          is_user_confirmed: false,
+          photos: [
+            {
+              photo_id: 'p_310',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-16T09:30:00+07:00',
+              latitude: 16.0611,
+              longitude: 108.2275,
+            },
+            {
+              photo_id: 'p_311',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-16T10:40:00+07:00',
+              latitude: 16.06125,
+              longitude: 108.2278,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Chuyến đi mẫu 4: Viễn du Đảo Ngọc Phú Quốc (2 ngày, 4 điểm dừng, 8 ảnh)
+ */
+export const PHUQUOC_MOCK_TIMELINE: TripTimeline = {
+  trip_id: 'trip_126',
+  title: 'Viễn du Đảo Ngọc Phú Quốc',
+  start_date: '2026-10-22',
+  end_date: '2026-10-23',
+  days: [
+    {
+      day_number: 1,
+      date: '2026-10-22',
+      stops: [
+        {
+          stop_id: 'pq_stop_01',
+          order_index: 1,
+          name: 'Bãi Sao • Nam Đảo Phú Quốc',
+          start_time: '2026-10-22T09:15:00+07:00',
+          end_time: '2026-10-22T12:00:00+07:00',
+          centroid: {
+            latitude: 10.0562,
+            longitude: 104.0342,
+          },
+          is_user_confirmed: true,
+          photos: [
+            {
+              photo_id: 'p_401',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1540202404-a2f29016b523?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1540202404-a2f29016b523?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-22T09:40:00+07:00',
+              latitude: 10.0562,
+              longitude: 104.0342,
+            },
+            {
+              photo_id: 'p_402',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-22T10:50:00+07:00',
+              latitude: 10.0564,
+              longitude: 104.0345,
+            },
+          ],
+        },
+        {
+          stop_id: 'pq_stop_02',
+          order_index: 2,
+          name: 'Sunset Sanato • Ngắm Hoàng Hôn Biển Đảo',
+          start_time: '2026-10-22T16:45:00+07:00',
+          end_time: '2026-10-22T18:30:00+07:00',
+          centroid: {
+            latitude: 10.1568,
+            longitude: 103.9665,
+          },
+          is_user_confirmed: true,
+          photos: [
+            {
+              photo_id: 'p_403',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-22T17:15:00+07:00',
+              latitude: 10.1568,
+              longitude: 103.9665,
+            },
+            {
+              photo_id: 'p_404',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-22T17:50:00+07:00',
+              latitude: 10.1569,
+              longitude: 103.9663,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      day_number: 2,
+      date: '2026-10-23',
+      stops: [
+        {
+          stop_id: 'pq_stop_03',
+          order_index: 1,
+          name: 'Làng Chài Hàm Ninh',
+          start_time: '2026-10-23T07:00:00+07:00',
+          end_time: '2026-10-23T09:30:00+07:00',
+          centroid: {
+            latitude: 10.1811,
+            longitude: 104.0453,
+          },
+          is_user_confirmed: false,
+          photos: [
+            {
+              photo_id: 'p_405',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-23T07:30:00+07:00',
+              latitude: 10.1811,
+              longitude: 104.0453,
+            },
+            {
+              photo_id: 'p_406',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-23T08:45:00+07:00',
+              latitude: null,
+              longitude: null,
+            },
+          ],
+        },
+        {
+          stop_id: 'pq_stop_04',
+          order_index: 2,
+          name: 'Chợ Đêm Hải Sản Dương Đông',
+          start_time: '2026-10-23T19:00:00+07:00',
+          end_time: '2026-10-23T21:15:00+07:00',
+          centroid: {
+            latitude: 10.2175,
+            longitude: 103.9598,
+          },
+          is_user_confirmed: false,
+          photos: [
+            {
+              photo_id: 'p_407',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-23T19:30:00+07:00',
+              latitude: 10.2175,
+              longitude: 103.9598,
+            },
+            {
+              photo_id: 'p_408',
+              thumbnail_url:
+                'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80',
+              original_url:
+                'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=85',
+              taken_at: '2026-10-23T20:15:00+07:00',
+              latitude: 10.2176,
+              longitude: 103.9601,
             },
           ],
         },
@@ -762,7 +1240,7 @@ export const MOCK_SEARCH_RESULTS: (SemanticSearchResultItem & { keywords?: strin
     photo_id: 'p_105',
     thumbnail_url:
       'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=700&q=80',
-    similarity_score: 0.94,
+    similarity_score: 0.96,
     taken_at: '2026-10-10T16:45:00+07:00',
     trip_id: 'trip_123',
     day_number: 1,
@@ -773,6 +1251,70 @@ export const MOCK_SEARCH_RESULTS: (SemanticSearchResultItem & { keywords?: strin
       longitude: 107.0831,
     },
     keywords: ['hoàng hôn', 'biển', 'buổi chiều', 'mũi đá', 'nghinh phong', 'bầu trời'],
+  },
+  {
+    photo_id: 'p_404',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.94,
+    taken_at: '2026-10-22T17:50:00+07:00',
+    trip_id: 'trip_126',
+    day_number: 1,
+    stop: {
+      stop_id: 'pq_stop_02',
+      name: 'Sunset Sanato • Ngắm Hoàng Hôn Biển Đảo',
+      latitude: 10.1568,
+      longitude: 103.9665,
+    },
+    keywords: ['hoàng hôn', 'biển', 'phú quốc', 'buổi chiều', 'bãi biển', 'bầu trời'],
+  },
+  {
+    photo_id: 'p_307',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.93,
+    taken_at: '2026-10-15T19:05:00+07:00',
+    trip_id: 'trip_125',
+    day_number: 2,
+    stop: {
+      stop_id: 'dn_stop_04',
+      name: 'Bến Sông Hoài & Đêm Đèn Lồng',
+      latitude: 15.8764,
+      longitude: 108.3282,
+    },
+    keywords: ['phố cổ', 'hội an', 'đèn lồng', 'buổi tối', 'sông hoài', 'ánh đèn'],
+  },
+  {
+    photo_id: 'p_107',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.92,
+    taken_at: '2026-10-11T11:30:00+07:00',
+    trip_id: 'trip_123',
+    day_number: 2,
+    stop: {
+      stop_id: 'stop_05',
+      name: 'Chợ Hải sản Xóm Lưới',
+      latitude: 10.3412,
+      longitude: 107.0725,
+    },
+    keywords: ['món ăn', 'ẩm thực', 'hải sản', 'địa phương', 'ăn trưa', 'chợ'],
+  },
+  {
+    photo_id: 'p_407',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.9,
+    taken_at: '2026-10-23T19:30:00+07:00',
+    trip_id: 'trip_126',
+    day_number: 2,
+    stop: {
+      stop_id: 'pq_stop_04',
+      name: 'Chợ Đêm Hải Sản Dương Đông',
+      latitude: 10.2175,
+      longitude: 103.9598,
+    },
+    keywords: ['món ăn', 'ẩm thực', 'hải sản', 'địa phương', 'chợ đêm', 'phú quốc'],
   },
   {
     photo_id: 'p_101',
@@ -788,61 +1330,29 @@ export const MOCK_SEARCH_RESULTS: (SemanticSearchResultItem & { keywords?: strin
       latitude: 10.34599,
       longitude: 107.08426,
     },
-    keywords: ['bãi biển', 'sóng biển', 'buổi sáng', 'cát trắng', 'bãi sau', 'biển'],
+    keywords: ['bãi biển', 'sóng biển', 'buổi sáng', 'nắng vàng', 'cát trắng', 'bãi sau', 'biển'],
   },
   {
-    photo_id: 'p_107',
+    photo_id: 'p_401',
     thumbnail_url:
-      'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=700&q=80',
-    similarity_score: 0.91,
-    taken_at: '2026-10-11T11:30:00+07:00',
-    trip_id: 'trip_123',
-    day_number: 2,
-    stop: {
-      stop_id: 'stop_05',
-      name: 'Chợ Hải sản Xóm Lưới',
-      latitude: 10.3412,
-      longitude: 107.0725,
-    },
-    keywords: ['món ăn', 'ẩm thực', 'hải sản', 'địa phương', 'ăn trưa', 'chợ'],
-  },
-  {
-    photo_id: 'p_106',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=700&q=80',
-    similarity_score: 0.85,
-    taken_at: '2026-10-11T08:05:00+07:00',
-    trip_id: 'trip_123',
-    day_number: 2,
-    stop: {
-      stop_id: 'stop_04',
-      name: 'Hải đăng Vũng Tàu',
-      latitude: 10.33582,
-      longitude: 107.07668,
-    },
-    keywords: ['hải đăng', 'đồi', 'toàn cảnh', 'buổi sáng', 'vũng tàu'],
-  },
-  {
-    photo_id: 'p_102',
-    thumbnail_url:
-      'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=700&q=80',
-    similarity_score: 0.82,
-    taken_at: '2026-10-10T09:10:00+07:00',
-    trip_id: 'trip_123',
+      'https://images.unsplash.com/photo-1540202404-a2f29016b523?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.88,
+    taken_at: '2026-10-22T09:40:00+07:00',
+    trip_id: 'trip_126',
     day_number: 1,
     stop: {
-      stop_id: 'stop_01',
-      name: 'Bãi Sau Thùy Vân',
-      latitude: 10.34599,
-      longitude: 107.08426,
+      stop_id: 'pq_stop_01',
+      name: 'Bãi Sao • Nam Đảo Phú Quốc',
+      latitude: 10.0562,
+      longitude: 104.0342,
     },
-    keywords: ['bãi biển', 'nắng vàng', 'biển xanh', 'nghỉ dưỡng'],
+    keywords: ['bãi biển', 'nắng vàng', 'buổi sáng', 'biển xanh', 'cát trắng', 'phú quốc'],
   },
   {
     photo_id: 'p_201',
     thumbnail_url:
       'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=700&q=80',
-    similarity_score: 0.88,
+    similarity_score: 0.91,
     taken_at: '2026-10-18T06:50:00+07:00',
     trip_id: 'trip_124',
     day_number: 1,
@@ -854,25 +1364,170 @@ export const MOCK_SEARCH_RESULTS: (SemanticSearchResultItem & { keywords?: strin
     },
     keywords: ['rừng thông', 'sương mù', 'đồi chè', 'núi đồi', 'đà lạt', 'bình minh'],
   },
+  {
+    photo_id: 'p_203',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.87,
+    taken_at: '2026-10-18T16:15:00+07:00',
+    trip_id: 'trip_124',
+    day_number: 1,
+    stop: {
+      stop_id: 'dl_stop_02',
+      name: 'Hồ Tuyền Lâm & Rừng Thông',
+      latitude: 11.9025,
+      longitude: 108.4318,
+    },
+    keywords: ['rừng thông', 'sương mù', 'đà lạt', 'mặt hồ', 'buổi chiều'],
+  },
+  {
+    photo_id: 'p_106',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.86,
+    taken_at: '2026-10-11T08:05:00+07:00',
+    trip_id: 'trip_123',
+    day_number: 2,
+    stop: {
+      stop_id: 'stop_04',
+      name: 'Hải đăng Vũng Tàu',
+      latitude: 10.33582,
+      longitude: 107.07668,
+    },
+    keywords: ['ngọn hải đăng', 'hải đăng', 'trên đồi', 'đồi', 'toàn cảnh', 'buổi sáng', 'vũng tàu'],
+  },
+  {
+    photo_id: 'p_301',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.85,
+    taken_at: '2026-10-14T06:30:00+07:00',
+    trip_id: 'trip_125',
+    day_number: 1,
+    stop: {
+      stop_id: 'dn_stop_01',
+      name: 'Bãi biển Mỹ Khê • Đà Nẵng',
+      latitude: 16.0598,
+      longitude: 108.2465,
+    },
+    keywords: ['bãi biển', 'nắng vàng', 'buổi sáng', 'đà nẵng', 'mỹ khê', 'bình minh'],
+  },
+  {
+    photo_id: 'p_102',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.83,
+    taken_at: '2026-10-10T09:10:00+07:00',
+    trip_id: 'trip_123',
+    day_number: 1,
+    stop: {
+      stop_id: 'stop_01',
+      name: 'Bãi Sau Thùy Vân',
+      latitude: 10.34599,
+      longitude: 107.08426,
+    },
+    keywords: ['bãi biển', 'nắng vàng', 'biển xanh', 'nghỉ dưỡng', 'buổi sáng'],
+  },
+  {
+    photo_id: 'p_207',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.84,
+    taken_at: '2026-10-19T14:45:00+07:00',
+    trip_id: 'trip_124',
+    day_number: 2,
+    stop: {
+      stop_id: 'dl_stop_04',
+      name: 'Ga Cổ Đà Lạt & Tiệm Cà Phê Gỗ',
+      latitude: 11.9418,
+      longitude: 108.4583,
+    },
+    keywords: ['cà phê', 'đà lạt', 'buổi chiều', 'ẩm thực', 'quán cà phê'],
+  },
+  {
+    photo_id: 'p_310',
+    thumbnail_url:
+      'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=700&q=80',
+    similarity_score: 0.82,
+    taken_at: '2026-10-16T09:30:00+07:00',
+    trip_id: 'trip_125',
+    day_number: 3,
+    stop: {
+      stop_id: 'dn_stop_05',
+      name: 'Cầu Rồng & Bờ Đông Sông Hàn',
+      latitude: 16.0611,
+      longitude: 108.2275,
+    },
+    keywords: ['cầu rồng', 'đà nẵng', 'sông hàn', 'thành phố', 'buổi sáng'],
+  },
 ];
+
+const INITIAL_EDIT_HISTORY: Record<string, UsabilityEditLogEntry[]> = {
+  trip_123: [
+    {
+      id: 'edit_seed_1',
+      trip_id: 'trip_123',
+      action: 'RENAME',
+      timestamp: '2026-10-24T20:15:00.000Z',
+      description: 'Đổi tên "Điểm dừng #2 • Núi Nhỏ" → "Tượng Chúa Kitô Vua" (Ngày 1)',
+      source_stop_ids: ['stop_02'],
+    },
+    {
+      id: 'edit_seed_2',
+      trip_id: 'trip_123',
+      action: 'MOVE_PHOTO',
+      timestamp: '2026-10-24T20:18:30.000Z',
+      description: 'Chuyển ảnh khuyết GPS (p_104) từ "Bãi Sau Thùy Vân" → "Tượng Chúa Kitô Vua"',
+      source_stop_ids: ['stop_01'],
+      target_stop_id: 'stop_02',
+      photo_id: 'p_104',
+    },
+  ],
+  trip_124: [
+    {
+      id: 'edit_seed_dl_1',
+      trip_id: 'trip_124',
+      action: 'MERGE',
+      timestamp: '2026-10-24T21:05:12.000Z',
+      description: 'Gộp "Đồi Chè Cầu Đất" + "Trạm Săn Mây Cầu Đất" (3 ảnh, Ngày 1)',
+      source_stop_ids: ['dl_stop_01', 'dl_stop_01b'],
+    },
+  ],
+  trip_125: [
+    {
+      id: 'edit_seed_dn_1',
+      trip_id: 'trip_125',
+      action: 'SPLIT',
+      timestamp: '2026-10-24T21:40:00.000Z',
+      description: 'Tách "Phố Cổ Hội An" thành "Chùa Cầu & Khu Phố Cổ" và "Bến Sông Hoài & Đêm Đèn Lồng"',
+      source_stop_ids: ['dn_stop_03'],
+    },
+  ],
+  trip_126: [],
+};
+
+const INITIAL_STOP_COUNTS: Record<string, number> = {
+  trip_123: 5,
+  trip_124: 5,
+  trip_125: 4,
+  trip_126: 4,
+};
 
 // Kho lưu trữ trạng thái trong bộ nhớ được đồng bộ 2 chiều với AsyncStorage
 let tripsStore: TripSummary[] = JSON.parse(JSON.stringify(MOCK_TRIPS));
 let timelinesStore: Record<string, TripTimeline> = {
   trip_123: JSON.parse(JSON.stringify(INITIAL_MOCK_TIMELINE)),
   trip_124: JSON.parse(JSON.stringify(DALAT_MOCK_TIMELINE)),
+  trip_125: JSON.parse(JSON.stringify(DANANG_HOIAN_MOCK_TIMELINE)),
+  trip_126: JSON.parse(JSON.stringify(PHUQUOC_MOCK_TIMELINE)),
 };
 let searchStore = JSON.parse(JSON.stringify(MOCK_SEARCH_RESULTS)) as (SemanticSearchResultItem & {
   keywords?: string[];
 })[];
-let editHistoryStore: Record<string, UsabilityEditLogEntry[]> = {
-  trip_123: [],
-  trip_124: [],
-};
-let initialStopCountsStore: Record<string, number> = {
-  trip_123: 5,
-  trip_124: 3,
-};
+let editHistoryStore: Record<string, UsabilityEditLogEntry[]> = JSON.parse(
+  JSON.stringify(INITIAL_EDIT_HISTORY)
+);
+let initialStopCountsStore: Record<string, number> = { ...INITIAL_STOP_COUNTS };
 
 let isHydrated = false;
 let hydrationPromise: Promise<void> | null = null;
@@ -886,20 +1541,47 @@ async function ensureHydrated(): Promise<void> {
 
   hydrationPromise = (async () => {
     const persisted = await loadPersistedAppState();
-    if (persisted.trips && persisted.trips.length > 0) {
+    const hasLatestMockSet =
+      persisted.trips?.some((t) => t.trip_id === 'trip_125') &&
+      persisted.trips?.some((t) => t.trip_id === 'trip_126');
+
+    if (persisted.trips && persisted.trips.length > 0 && hasLatestMockSet) {
       tripsStore = persisted.trips;
-    }
-    if (persisted.timelines && Object.keys(persisted.timelines).length > 0) {
-      timelinesStore = persisted.timelines;
-    }
-    if (persisted.searchIndex && persisted.searchIndex.length > 0) {
-      searchStore = persisted.searchIndex;
-    }
-    if (persisted.editHistory) {
-      editHistoryStore = persisted.editHistory;
-    }
-    if (persisted.initialStopCounts) {
-      initialStopCountsStore = persisted.initialStopCounts;
+      if (persisted.timelines && Object.keys(persisted.timelines).length > 0) {
+        timelinesStore = persisted.timelines;
+      }
+      if (persisted.searchIndex && persisted.searchIndex.length > 0) {
+        searchStore = persisted.searchIndex;
+      }
+      if (persisted.editHistory) {
+        editHistoryStore = persisted.editHistory;
+      }
+      if (persisted.initialStopCounts) {
+        initialStopCountsStore = persisted.initialStopCounts;
+      }
+    } else if (persisted.trips && persisted.trips.length > 0) {
+      // Giữ lại các chuyến đi do người dùng tự tải ảnh lên, đồng thời bổ sung bộ Mock Data mới nhất
+      const defaultIds = new Set(MOCK_TRIPS.map((t) => t.trip_id));
+      const customTrips = persisted.trips.filter((t) => !defaultIds.has(t.trip_id));
+      tripsStore = [...customTrips, ...JSON.parse(JSON.stringify(MOCK_TRIPS))];
+
+      timelinesStore = {
+        ...(persisted.timelines ?? {}),
+        trip_123: JSON.parse(JSON.stringify(INITIAL_MOCK_TIMELINE)),
+        trip_124: JSON.parse(JSON.stringify(DALAT_MOCK_TIMELINE)),
+        trip_125: JSON.parse(JSON.stringify(DANANG_HOIAN_MOCK_TIMELINE)),
+        trip_126: JSON.parse(JSON.stringify(PHUQUOC_MOCK_TIMELINE)),
+      };
+      searchStore = JSON.parse(JSON.stringify(MOCK_SEARCH_RESULTS));
+      editHistoryStore = {
+        ...JSON.parse(JSON.stringify(INITIAL_EDIT_HISTORY)),
+        ...(persisted.editHistory ?? {}),
+      };
+      initialStopCountsStore = {
+        ...INITIAL_STOP_COUNTS,
+        ...(persisted.initialStopCounts ?? {}),
+      };
+      await persistCurrentState();
     }
     isHydrated = true;
   })();
@@ -1366,22 +2048,20 @@ export function formatUsabilityReportMarkdown(report: UsabilityTripReport): stri
 export async function resetMockTimeline(tripId: string = 'trip_123'): Promise<TripTimeline> {
   await ensureHydrated();
 
-  if (tripId === 'trip_124') {
-    timelinesStore.trip_124 = JSON.parse(JSON.stringify(DALAT_MOCK_TIMELINE));
-    editHistoryStore.trip_124 = [];
-    initialStopCountsStore.trip_124 = 3;
-    syncTripSummaryStats('trip_124', timelinesStore.trip_124);
-    await persistCurrentState();
-    return JSON.parse(JSON.stringify(timelinesStore.trip_124));
-  }
+  const defaultMap: Record<string, TripTimeline> = {
+    trip_123: INITIAL_MOCK_TIMELINE,
+    trip_124: DALAT_MOCK_TIMELINE,
+    trip_125: DANANG_HOIAN_MOCK_TIMELINE,
+    trip_126: PHUQUOC_MOCK_TIMELINE,
+  };
 
-  if (tripId === 'trip_123') {
-    timelinesStore.trip_123 = JSON.parse(JSON.stringify(INITIAL_MOCK_TIMELINE));
-    editHistoryStore.trip_123 = [];
-    initialStopCountsStore.trip_123 = 5;
-    syncTripSummaryStats('trip_123', timelinesStore.trip_123);
+  if (defaultMap[tripId]) {
+    timelinesStore[tripId] = JSON.parse(JSON.stringify(defaultMap[tripId]));
+    editHistoryStore[tripId] = JSON.parse(JSON.stringify(INITIAL_EDIT_HISTORY[tripId] ?? []));
+    initialStopCountsStore[tripId] = INITIAL_STOP_COUNTS[tripId] ?? 5;
+    syncTripSummaryStats(tripId, timelinesStore[tripId]);
     await persistCurrentState();
-    return JSON.parse(JSON.stringify(timelinesStore.trip_123));
+    return JSON.parse(JSON.stringify(timelinesStore[tripId]));
   }
 
   // Với chuyến đi mới tạo từ ảnh thật: gom cụm lại từ toàn bộ các bức ảnh hiện có của chuyến đi đó
@@ -1413,16 +2093,12 @@ export async function resetAllMockDataToDefaults(): Promise<TripSummary[]> {
   timelinesStore = {
     trip_123: JSON.parse(JSON.stringify(INITIAL_MOCK_TIMELINE)),
     trip_124: JSON.parse(JSON.stringify(DALAT_MOCK_TIMELINE)),
+    trip_125: JSON.parse(JSON.stringify(DANANG_HOIAN_MOCK_TIMELINE)),
+    trip_126: JSON.parse(JSON.stringify(PHUQUOC_MOCK_TIMELINE)),
   };
   searchStore = JSON.parse(JSON.stringify(MOCK_SEARCH_RESULTS));
-  editHistoryStore = {
-    trip_123: [],
-    trip_124: [],
-  };
-  initialStopCountsStore = {
-    trip_123: 5,
-    trip_124: 3,
-  };
+  editHistoryStore = JSON.parse(JSON.stringify(INITIAL_EDIT_HISTORY));
+  initialStopCountsStore = { ...INITIAL_STOP_COUNTS };
   isHydrated = true;
 
   await clearAllPersistedTripData();

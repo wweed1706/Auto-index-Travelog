@@ -28,11 +28,12 @@ import { SemanticSearchResultItem, TripSummary } from '@/types/trip';
 
 const NATURAL_QUERY_SUGGESTIONS: string[] = [
   'hoàng hôn trên biển',
+  'phố cổ đèn lồng buổi tối',
   'món ăn hải sản địa phương',
-  'buổi chiều ở mũi đá',
   'bãi biển nắng vàng buổi sáng',
-  'ngọn hải đăng trên đồi',
   'rừng thông sương mù Đà Lạt',
+  'ngọn hải đăng trên đồi',
+  'cầu rồng Đà Nẵng',
 ];
 
 export default function SemanticSearchScreen() {
