@@ -147,3 +147,52 @@ export interface SemanticSearchResponse {
   query: string;
   results: SemanticSearchResultItem[];
 }
+
+/**
+ * Chế độ nguồn dữ liệu của Tầng Giao tiếp Linh hoạt (tripRepository)
+ */
+export type DataSourceMode = 'LOCAL_SMART_MOCK' | 'REMOTE_FASTAPI';
+
+/**
+ * Thống kê số lượng từng thao tác chỉnh sửa Human-in-the-Loop (Phục vụ Báo cáo Mục 9.7)
+ */
+export interface UsabilityActionCounts {
+  MERGE: number;
+  SPLIT: number;
+  RENAME: number;
+  REORDER: number;
+  MOVE_PHOTO: number;
+}
+
+/**
+ * Một bản ghi lịch sử thao tác chỉnh sửa của người dùng trên chuyến đi
+ */
+export interface UsabilityEditLogEntry {
+  id: string;
+  trip_id: string;
+  action: StopMutateAction;
+  timestamp: string;
+  description: string;
+  source_stop_ids: string[];
+  target_stop_id?: string;
+  photo_id?: string;
+}
+
+/**
+ * Báo cáo Thực nghiệm Usability chi tiết cho một chuyến đi (Mục 9.7)
+ */
+export interface UsabilityTripReport {
+  trip_id: string;
+  trip_title: string;
+  total_edits: number;
+  initial_stop_count: number;
+  current_stop_count: number;
+  confirmed_stop_count: number;
+  total_photos: number;
+  gps_valid_photos: number;
+  gps_missing_photos: number;
+  counts_by_action: UsabilityActionCounts;
+  history: UsabilityEditLogEntry[];
+  last_updated_at: string | null;
+}
+

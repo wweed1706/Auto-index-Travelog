@@ -34,6 +34,7 @@ export interface TimelineStopCardProps {
   onSplit: (stop: StopWithDayMeta) => void;
   onReorder: (stop: StopWithDayMeta) => void;
   onMovePhoto: (stop: StopWithDayMeta, photo?: PhotoItem) => void;
+  onInspectPhoto?: (stop: StopWithDayMeta, photo: PhotoItem) => void;
 }
 
 function formatTimeHm(isoStr: string): string {
@@ -54,6 +55,7 @@ export function TimelineStopCard({
   onSplit,
   onReorder,
   onMovePhoto,
+  onInspectPhoto,
 }: TimelineStopCardProps) {
   const canSplit = stop.photos.length >= 2;
 
@@ -160,7 +162,7 @@ export function TimelineStopCard({
           )}
         </View>
 
-        {/* Lush Magazine Photo Strip (Light Framed Cards) */}
+        {/* Lush Magazine Photo Strip — Bấm vào ảnh để mở Modal Xem chi tiết Ảnh & Chuyển ảnh (UC-11) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -168,7 +170,21 @@ export function TimelineStopCard({
           {stop.photos.map((photo) => {
             const hasGps = photo.latitude !== null && photo.longitude !== null;
             return (
-              <View key={photo.photo_id} style={styles.photoFrame}>
+              <Pressable
+                key={photo.photo_id}
+                style={({ pressed }) => [
+                  styles.photoFrame,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  if (onInspectPhoto) {
+                    onInspectPhoto(stop, photo);
+                  } else {
+                    onMovePhoto(stop, photo);
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Xem chi tiết ảnh chụp lúc ${formatTimeHm(photo.taken_at)} tại ${stop.name}`}>
                 <Image
                   source={{ uri: photo.thumbnail_url }}
                   style={styles.photoImage}
@@ -177,6 +193,10 @@ export function TimelineStopCard({
 
                 <View style={styles.photoTopLeftBadge}>
                   <ExifStatusBadge hasGps={hasGps} compact />
+                </View>
+
+                <View style={styles.photoTopRightZoomPill}>
+                  <Feather name="maximize-2" size={10} color={Palette.surface} />
                 </View>
 
                 <View style={styles.photoBottomLightBar}>
@@ -198,7 +218,7 @@ export function TimelineStopCard({
                     </Pressable>
                   )}
                 </View>
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -436,6 +456,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     left: 6,
+  },
+  photoTopRightZoomPill: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15, 23, 42, 0.56)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   photoBottomLightBar: {
     flexDirection: 'row',

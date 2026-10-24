@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { HeroTripCard } from '@/components/ui';
-import { getTrips } from '@/services/mockApi';
+import { tripRepository } from '@/services/tripRepository';
 import {
   IconSize,
   Palette,
@@ -23,7 +23,7 @@ import {
   Spacing,
   TouchTarget,
 } from '@/theme';
-import { TripSummary } from '@/types/trip';
+import { DataSourceMode, TripSummary } from '@/types/trip';
 
 const QUICK_AI_PROMPTS = [
   'hoàng hôn trên biển',
@@ -43,15 +43,26 @@ function computeDaysBetween(startDate: string, endDate: string, fallback?: numbe
 export default function TripListScreen() {
   const [trips, setTrips] = useState<TripSummary[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [dataSourceMode, setDataSourceMode] =
+    useState<DataSourceMode>('LOCAL_SMART_MOCK');
+  const [fallbackActive, setFallbackActive] = useState<boolean>(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const loadScreenData = useCallback(async () => {
+    const mode = await tripRepository.getMode();
+    setDataSourceMode(mode);
+    const data = await tripRepository.getTrips();
+    setTrips(data);
+    const snap = tripRepository.getStatusSnapshot();
+    setFallbackActive(snap.fallbackTriggered);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
-      getTrips()
-        .then((data) => {
-          if (isMounted) {
-            setTrips(data);
-          }
+      loadScreenData()
+        .catch(() => {
+          // Handled inside repository fallback
         })
         .finally(() => {
           if (isMounted) {
@@ -62,7 +73,7 @@ export default function TripListScreen() {
       return () => {
         isMounted = false;
       };
-    }, [])
+    }, [loadScreenData])
   );
 
   const summaryStats = useMemo(() => {
@@ -78,6 +89,30 @@ export default function TripListScreen() {
 
   const handleAddPhotos = useCallback((tripId: string) => {
     router.push({ pathname: '/upload', params: { tripId } });
+  }, []);
+
+  const handleToggleDataSourceMode = useCallback(async () => {
+    const nextSnap = await tripRepository.toggleMode();
+    setDataSourceMode(nextSnap.mode);
+    const data = await tripRepository.getTrips();
+    setTrips(data);
+    const afterCallSnap = tripRepository.getStatusSnapshot();
+    setFallbackActive(afterCallSnap.fallbackTriggered);
+    setStatusMessage(
+      nextSnap.mode === 'LOCAL_SMART_MOCK'
+        ? 'Đang dùng chế độ LOCAL_SMART_MOCK (Xử lý EXIF & lưu AsyncStorage trực tiếp trên thiết bị).'
+        : afterCallSnap.fallbackTriggered
+          ? 'REMOTE_FASTAPI chưa phản hồi — Đã tự động fallback an toàn về dữ liệu Local.'
+          : 'Đang kết nối chế độ REMOTE_FASTAPI.'
+    );
+  }, []);
+
+  const handleResetDemoData = useCallback(async () => {
+    const restoredTrips = await tripRepository.resetAllMockDataToDefaults();
+    setTrips(restoredTrips);
+    setStatusMessage(
+      'Đã khôi phục dữ liệu mẫu gốc (Vũng Tàu & Đà Lạt) và làm mới bộ nhớ AsyncStorage!'
+    );
   }, []);
 
   const renderHeader = () => (
@@ -122,6 +157,53 @@ export default function TripListScreen() {
           ngôn ngữ tự nhiên.
         </Text>
       </View>
+
+      {/* Flexible Data Source Switcher + Reset Demo Data Bar */}
+      <View style={styles.repoControlBar}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.modeSwitchPill,
+            dataSourceMode === 'REMOTE_FASTAPI' && styles.modeSwitchPillRemote,
+            pressed && styles.pressed,
+          ]}
+          onPress={handleToggleDataSourceMode}
+          accessibilityRole="button"
+          accessibilityLabel={`Chuyển đổi nguồn dữ liệu, hiện tại: ${dataSourceMode}`}>
+          <View
+            style={[
+              styles.modeDot,
+              dataSourceMode === 'REMOTE_FASTAPI' ? styles.modeDotIndigo : styles.modeDotEmerald,
+            ]}
+          />
+          <Text style={styles.modeSwitchText} numberOfLines={1}>
+            {dataSourceMode === 'LOCAL_SMART_MOCK'
+              ? 'Local Smart Mock • AsyncStorage'
+              : fallbackActive
+                ? 'FastAPI (Auto-Fallback Local)'
+                : 'Remote FastAPI Mode'}
+          </Text>
+          <Feather name="repeat" size={11} color={Palette.teal700} />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.resetDemoPill,
+            pressed && styles.pressed,
+          ]}
+          onPress={handleResetDemoData}
+          accessibilityRole="button"
+          accessibilityLabel="Khôi phục dữ liệu mẫu ban đầu">
+          <Feather name="rotate-ccw" size={11} color={Palette.coral600} />
+          <Text style={styles.resetDemoPillText}>Khôi phục dữ liệu mẫu</Text>
+        </Pressable>
+      </View>
+
+      {statusMessage && (
+        <View style={styles.statusToastRow}>
+          <Ionicons name="checkmark-circle" size={IconSize.sm} color={Palette.emeraldText} />
+          <Text style={styles.statusToastText}>{statusMessage}</Text>
+        </View>
+      )}
 
       {/* Luminous Lavender-Indigo AI Visual Search Spotlight Card (Light Theme) */}
       <View style={styles.lightSpotlightCard}>
@@ -423,6 +505,82 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: Palette.textSecondary,
   },
+  repoControlBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  modeSwitchPill: {
+    flex: 1,
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.pill,
+    ...Shadows.subtle,
+  },
+  modeSwitchPillRemote: {
+    borderColor: Palette.indigo100,
+    backgroundColor: Palette.indigo50,
+  },
+  modeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  modeDotEmerald: {
+    backgroundColor: Palette.emeraldDot,
+  },
+  modeDotIndigo: {
+    backgroundColor: Palette.indigo600,
+  },
+  modeSwitchText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    color: Palette.textPrimary,
+  },
+  resetDemoPill: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Palette.coral50,
+    borderWidth: 1,
+    borderColor: Palette.coral100,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.pill,
+  },
+  resetDemoPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Palette.coral600,
+  },
+  statusToastRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Palette.emeraldBg,
+    borderWidth: 1,
+    borderColor: Palette.emeraldBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+  },
+  statusToastText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.emeraldText,
+  },
   lightSpotlightCard: {
     backgroundColor: Palette.indigo50,
     borderRadius: Radius.xl,
@@ -524,20 +682,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bentoLiveTag: {
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.teal100,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-  },
-  bentoLiveTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: Palette.teal700,
-    letterSpacing: 0.6,
-  },
   bentoLeftBottomBlock: {
     gap: 4,
     marginTop: Spacing.lg,
@@ -596,11 +740,6 @@ const styles = StyleSheet.create({
   },
   indigoCircle: {
     backgroundColor: Palette.indigo50,
-  },
-  bentoSmallCaption: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Palette.textMuted,
   },
   bentoSmallNumber: {
     fontFamily: SERIF_FONT,

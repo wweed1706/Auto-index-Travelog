@@ -13,6 +13,7 @@ export interface HitlActionPillBarProps {
   onReorder: () => void;
   onMovePhoto: () => void;
   onReset: () => void;
+  onOpenUsabilityReport?: () => void;
 }
 
 export function HitlActionPillBar({
@@ -24,6 +25,7 @@ export function HitlActionPillBar({
   onReorder,
   onMovePhoto,
   onReset,
+  onOpenUsabilityReport,
 }: HitlActionPillBarProps) {
   return (
     <View style={styles.dockContainer}>
@@ -31,11 +33,20 @@ export function HitlActionPillBar({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.dockScrollRow}>
-        {/* Edits Counter Pill (Light Indigo Surface) */}
-        <View style={styles.editsBadgePill}>
+        {/* Edits Counter Pill — Bấm để mở Modal Báo cáo Thực nghiệm Usability (Mục 9.7) */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.editsBadgePill,
+            pressed && styles.pillPressed,
+          ]}
+          onPress={onOpenUsabilityReport}
+          hitSlop={TouchTarget.hitSlop}
+          accessibilityRole="button"
+          accessibilityLabel={`Mở báo cáo thực nghiệm Usability: ${editCount} thao tác tinh chỉnh`}>
           <View style={styles.sparkleDot} />
           <Text style={styles.editsBadgeText}>{editCount} tinh chỉnh</Text>
-        </View>
+          <Feather name="bar-chart-2" size={12} color={Palette.indigo600} />
+        </Pressable>
 
         <Pressable
           style={({ pressed }) => [styles.dockActionPill, pressed && styles.pillPressed]}
@@ -124,13 +135,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   editsBadgePill: {
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: Palette.indigo50,
     borderWidth: 1,
     borderColor: Palette.indigo100,
-    paddingHorizontal: 10,
+    paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: Radius.pill,
   },

@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -18,16 +19,14 @@ import MapView, { Marker, Polyline, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
+  ExifStatusBadge,
   HitlActionPillBar,
   NumberedMapMarker,
   StopWithDayMeta,
   TimelineStopCard,
 } from '@/components/ui';
-import {
-  getTripTimeline,
-  mutateTripStops,
-  resetMockTimeline,
-} from '@/services/mockApi';
+import { formatUsabilityReportMarkdown } from '@/services/mockApi';
+import { tripRepository } from '@/services/tripRepository';
 import {
   IconSize,
   MONO_FONT,
@@ -38,7 +37,13 @@ import {
   Spacing,
   TouchTarget,
 } from '@/theme';
-import { Coordinates, PhotoItem, TripStop, TripTimeline } from '@/types/trip';
+import {
+  Coordinates,
+  PhotoItem,
+  TripStop,
+  TripTimeline,
+  UsabilityTripReport,
+} from '@/types/trip';
 
 const DEFAULT_REGION: Region = {
   latitude: 10.33582,
@@ -61,6 +66,39 @@ function formatTimeHm(isoStr: string): string {
   return timePart ? timePart.slice(0, 5) : '--:--';
 }
 
+function formatFullDateTime(isoStr: string): string {
+  if (!isoStr) return 'Không rõ thời gian';
+  return isoStr.slice(0, 19).replace('T', ' • ');
+}
+
+async function copyTextToClipboardOrShare(text: string, title: string): Promise<boolean> {
+  try {
+    if (
+      typeof navigator !== 'undefined' &&
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === 'function'
+    ) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fallback sang Share API trên thiết bị di động
+  }
+
+  try {
+    if (Platform.OS !== 'web') {
+      await Share.share({
+        title,
+        message: text,
+      });
+      return true;
+    }
+  } catch {
+    // Ignore share cancellation
+  }
+  return false;
+}
+
 const RENAME_SUGGESTIONS: string[] = [
   'Bãi Sau Vũng Tàu • Bình Minh',
   'Đỉnh Tượng Chúa Kitô Vua',
@@ -81,23 +119,44 @@ export default function TripTimelineMapScreen() {
   const [editCount, setEditCount] = useState<number>(0);
   const [lastActionBanner, setLastActionBanner] = useState<string | null>(null);
 
-  // Modal State: RENAME (UC-11)
+  // Modal 1: RENAME (UC-11)
   const [renameModalVisible, setRenameModalVisible] = useState<boolean>(false);
   const [renameTargetStop, setRenameTargetStop] = useState<TripStop | null>(null);
   const [renameInputValue, setRenameInputValue] = useState<string>('');
 
-  // Modal State: MOVE_PHOTO (UC-11)
+  // Modal 2: MOVE_PHOTO (UC-11)
   const [movePhotoModalVisible, setMovePhotoModalVisible] = useState<boolean>(false);
   const [moveSourceStop, setMoveSourceStop] = useState<TripStop | null>(null);
   const [selectedPhotoToMove, setSelectedPhotoToMove] = useState<PhotoItem | null>(null);
 
+  // Modal 3: PHOTO DETAIL LIGHTBOX & QUICK MOVE (UC-11)
+  const [inspectModalVisible, setInspectModalVisible] = useState<boolean>(false);
+  const [inspectedStop, setInspectedStop] = useState<StopWithDayMeta | null>(null);
+  const [inspectedPhoto, setInspectedPhoto] = useState<PhotoItem | null>(null);
+
+  // Modal 4: USABILITY EVALUATION REPORT (Mục 9.7)
+  const [usabilityModalVisible, setUsabilityModalVisible] = useState<boolean>(false);
+  const [usabilityReport, setUsabilityReport] = useState<UsabilityTripReport | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  const refreshUsabilityStats = useCallback(async (targetTripId: string) => {
+    const report = await tripRepository.getTripUsabilityReport(targetTripId);
+    setUsabilityReport(report);
+    setEditCount(report.total_edits);
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    getTripTimeline(tripId)
-      .then((data) => {
+    Promise.all([
+      tripRepository.getTripTimeline(tripId),
+      tripRepository.getTripUsabilityReport(tripId),
+    ])
+      .then(([data, report]) => {
         if (isMounted) {
           setTimeline(data);
+          setUsabilityReport(report);
+          setEditCount(report.total_edits);
           const firstDay = data.days[0];
           const firstStop = firstDay?.stops[0];
           setSelectedDayNum(firstDay?.day_number ?? 1);
@@ -115,25 +174,28 @@ export default function TripTimelineMapScreen() {
     };
   }, [tripId]);
 
-  const displayedStops: StopWithDayMeta[] = useMemo(() => {
+  const allStopsWithMeta: StopWithDayMeta[] = useMemo(() => {
     if (!timeline) return [];
     const list: StopWithDayMeta[] = [];
     let counter = 1;
     for (const day of timeline.days) {
-      if (selectedDayNum === 'ALL' || day.day_number === selectedDayNum) {
-        for (const stop of day.stops) {
-          list.push({
-            ...stop,
-            day_number: day.day_number,
-            date: day.date,
-            global_index: counter,
-          });
-          counter += 1;
-        }
+      for (const stop of day.stops) {
+        list.push({
+          ...stop,
+          day_number: day.day_number,
+          date: day.date,
+          global_index: counter,
+        });
+        counter += 1;
       }
     }
     return list;
-  }, [timeline, selectedDayNum]);
+  }, [timeline]);
+
+  const displayedStops: StopWithDayMeta[] = useMemo(() => {
+    if (selectedDayNum === 'ALL') return allStopsWithMeta;
+    return allStopsWithMeta.filter((s) => s.day_number === selectedDayNum);
+  }, [allStopsWithMeta, selectedDayNum]);
 
   const routeCoordinates: Coordinates[] = useMemo(() => {
     return displayedStops
@@ -211,17 +273,17 @@ export default function TripTimelineMapScreen() {
       const first = dayObj.stops[firstIdx];
       const second = dayObj.stops[firstIdx + 1];
 
-      const updated = await mutateTripStops(tripId, {
+      const updated = await tripRepository.mutateTripStops(tripId, {
         action: 'MERGE',
         source_stop_ids: [first.stop_id, second.stop_id],
         new_name: `${first.name} & ${second.name}`,
       });
       setTimeline(updated);
       setSelectedStopId(first.stop_id);
-      setEditCount((c) => c + 1);
+      await refreshUsabilityStats(tripId);
       setLastActionBanner(`Đã gộp "${first.name}" và "${second.name}".`);
     },
-    [selectedDayNum, timeline, tripId]
+    [refreshUsabilityStats, selectedDayNum, timeline, tripId]
   );
 
   const handleSplitStop = useCallback(
@@ -236,18 +298,18 @@ export default function TripTimelineMapScreen() {
         return;
       }
 
-      const updated = await mutateTripStops(tripId, {
+      const updated = await tripRepository.mutateTripStops(tripId, {
         action: 'SPLIT',
         source_stop_ids: [candidate.stop_id],
         new_name: `${candidate.name} (Điểm tách)`,
       });
       setTimeline(updated);
-      setEditCount((c) => c + 1);
+      await refreshUsabilityStats(tripId);
       setLastActionBanner(
         `Đã tách "${candidate.name}" (${candidate.photos.length} ảnh) thành 2 điểm dừng.`
       );
     },
-    [displayedStops, tripId]
+    [displayedStops, refreshUsabilityStats, tripId]
   );
 
   const openRenameModal = useCallback(
@@ -264,13 +326,13 @@ export default function TripTimelineMapScreen() {
   const handleConfirmRename = async () => {
     if (!renameTargetStop || !renameInputValue.trim()) return;
     const newName = renameInputValue.trim();
-    const updated = await mutateTripStops(tripId, {
+    const updated = await tripRepository.mutateTripStops(tripId, {
       action: 'RENAME',
       source_stop_ids: [renameTargetStop.stop_id],
       new_name: newName,
     });
     setTimeline(updated);
-    setEditCount((c) => c + 1);
+    await refreshUsabilityStats(tripId);
     setLastActionBanner(`Đã đổi tên thành "${newName}".`);
     setRenameModalVisible(false);
   };
@@ -300,16 +362,16 @@ export default function TripTimelineMapScreen() {
         nextOrderedIds = [...currentIds].reverse();
       }
 
-      const updated = await mutateTripStops(tripId, {
+      const updated = await tripRepository.mutateTripStops(tripId, {
         action: 'REORDER',
         source_stop_ids: nextOrderedIds,
         ordered_stop_ids: nextOrderedIds,
       });
       setTimeline(updated);
-      setEditCount((c) => c + 1);
+      await refreshUsabilityStats(tripId);
       setLastActionBanner(`Đã cập nhật thứ tự điểm dừng Ngày ${targetDayNum}.`);
     },
-    [selectedDayNum, timeline, tripId]
+    [refreshUsabilityStats, selectedDayNum, timeline, tripId]
   );
 
   const openMovePhotoModal = useCallback(
@@ -325,25 +387,74 @@ export default function TripTimelineMapScreen() {
 
   const handleConfirmMovePhoto = async (targetStop: TripStop) => {
     if (!moveSourceStop || !selectedPhotoToMove) return;
-    const updated = await mutateTripStops(tripId, {
+    const updated = await tripRepository.mutateTripStops(tripId, {
       action: 'MOVE_PHOTO',
       source_stop_ids: [moveSourceStop.stop_id],
       target_stop_id: targetStop.stop_id,
       photo_id: selectedPhotoToMove.photo_id,
     });
     setTimeline(updated);
-    setEditCount((c) => c + 1);
+    await refreshUsabilityStats(tripId);
     setLastActionBanner(`Đã chuyển ảnh sang "${targetStop.name}".`);
     setMovePhotoModalVisible(false);
+    setInspectModalVisible(false);
   };
 
-  const handleResetAll = useCallback(() => {
-    const restored = resetMockTimeline(tripId);
-    setTimeline(restored);
-    setEditCount(0);
-    setSelectedStopId(restored.days[0]?.stops[0]?.stop_id ?? null);
-    setLastActionBanner('Đã khôi phục dữ liệu gom cụm gốc.');
+  // Mở Modal Xem chi tiết Ảnh & Chuyển ảnh nhanh (UC-11)
+  const handleInspectPhoto = useCallback((stop: StopWithDayMeta, photo: PhotoItem) => {
+    setInspectedStop(stop);
+    setInspectedPhoto(photo);
+    setInspectModalVisible(true);
+  }, []);
+
+  const handleQuickMoveFromInspectModal = async (targetStop: TripStop) => {
+    if (!inspectedStop || !inspectedPhoto) return;
+    const updated = await tripRepository.mutateTripStops(tripId, {
+      action: 'MOVE_PHOTO',
+      source_stop_ids: [inspectedStop.stop_id],
+      target_stop_id: targetStop.stop_id,
+      photo_id: inspectedPhoto.photo_id,
+    });
+    setTimeline(updated);
+    await refreshUsabilityStats(tripId);
+    setLastActionBanner(
+      `Đã chuyển ảnh (${inspectedPhoto.photo_id}) sang "${targetStop.name}".`
+    );
+    setInspectModalVisible(false);
+  };
+
+  // Mở Modal Báo cáo Thực nghiệm Usability (Mục 9.7)
+  const handleOpenUsabilityReportModal = useCallback(async () => {
+    const report = await tripRepository.getTripUsabilityReport(tripId);
+    setUsabilityReport(report);
+    setCopyFeedback(null);
+    setUsabilityModalVisible(true);
   }, [tripId]);
+
+  const handleCopyUsabilityMarkdown = async () => {
+    if (!usabilityReport) return;
+    const md = formatUsabilityReportMarkdown(usabilityReport);
+    await copyTextToClipboardOrShare(md, `Báo cáo Usability - ${usabilityReport.trip_title}`);
+    setCopyFeedback('Đã sao chép Báo cáo Markdown (Mục 9.7) vào bộ nhớ tạm!');
+  };
+
+  const handleCopyUsabilityJson = async () => {
+    if (!usabilityReport) return;
+    const jsonStr = JSON.stringify(usabilityReport, null, 2);
+    await copyTextToClipboardOrShare(
+      jsonStr,
+      `Usability JSON - ${usabilityReport.trip_title}`
+    );
+    setCopyFeedback('Đã sao chép dữ liệu JSON Thực nghiệm Usability!');
+  };
+
+  const handleResetAll = useCallback(async () => {
+    const restored = await tripRepository.resetTripTimeline(tripId);
+    setTimeline(restored);
+    await refreshUsabilityStats(tripId);
+    setSelectedStopId(restored.days[0]?.stops[0]?.stop_id ?? null);
+    setLastActionBanner('Đã khôi phục dữ liệu gom cụm gốc & đặt lại bộ đếm Usability.');
+  }, [refreshUsabilityStats, tripId]);
 
   if (loading || !timeline) {
     return (
@@ -358,9 +469,19 @@ export default function TripTimelineMapScreen() {
     );
   }
 
-  const candidateTargetStopsForPhoto = displayedStops.filter(
+  const candidateTargetStopsForPhoto = allStopsWithMeta.filter(
     (s) => s.stop_id !== moveSourceStop?.stop_id
   );
+
+  const candidateTargetStopsForInspectedPhoto = allStopsWithMeta.filter(
+    (s) => s.stop_id !== inspectedStop?.stop_id
+  );
+
+  const inspectedHasGps =
+    inspectedPhoto?.latitude !== null &&
+    inspectedPhoto?.latitude !== undefined &&
+    inspectedPhoto?.longitude !== null &&
+    inspectedPhoto?.longitude !== undefined;
 
   return (
     <View style={styles.rootContainer}>
@@ -481,12 +602,20 @@ export default function TripTimelineMapScreen() {
 
         {/* Floating Light Bottom Map Controls */}
         <View style={styles.floatingMapBottomRow}>
-          <View style={styles.mapRouteSummaryPill}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.mapRouteSummaryPill,
+              pressed && styles.pressed,
+            ]}
+            onPress={handleOpenUsabilityReportModal}
+            accessibilityRole="button"
+            accessibilityLabel="Mở báo cáo thực nghiệm Usability">
             <Ionicons name="git-commit-outline" size={IconSize.sm} color={Palette.teal700} />
             <Text style={styles.mapRouteSummaryText}>
               {displayedStops.length} điểm dừng • {editCount} chỉnh sửa
             </Text>
-          </View>
+            <Feather name="bar-chart-2" size={12} color={Palette.indigo600} />
+          </Pressable>
 
           <Pressable
             style={({ pressed }) => [
@@ -600,6 +729,7 @@ export default function TripTimelineMapScreen() {
           onReorder={() => handleReorderStops(selectedStop)}
           onMovePhoto={() => openMovePhotoModal(selectedStop)}
           onReset={handleResetAll}
+          onOpenUsabilityReport={handleOpenUsabilityReportModal}
         />
 
         {/* Connected Vertical Stepper Virtualized List */}
@@ -614,13 +744,14 @@ export default function TripTimelineMapScreen() {
               selected={item.stop_id === selectedStop?.stop_id}
               isLast={index === displayedStops.length - 1}
               showDayTag={selectedDayNum === 'ALL'}
-              canMoveBetweenStops={displayedStops.length >= 2}
+              canMoveBetweenStops={allStopsWithMeta.length >= 2}
               onSelectStop={handleFocusStopOnMap}
               onRename={openRenameModal}
               onMerge={handleMergeStops}
               onSplit={handleSplitStop}
               onReorder={handleReorderStops}
               onMovePhoto={openMovePhotoModal}
+              onInspectPhoto={handleInspectPhoto}
             />
           )}
         />
@@ -760,7 +891,7 @@ export default function TripTimelineMapScreen() {
 
             <Text style={styles.modalSubtitle}>2. Chọn điểm dừng đích để chuyển tới:</Text>
 
-            <View style={styles.targetStopsList}>
+            <ScrollView style={styles.targetStopsList} showsVerticalScrollIndicator={false}>
               {candidateTargetStopsForPhoto.length === 0 ? (
                 <Text style={styles.emptyTargetHint}>
                   Không có điểm dừng khác để chuyển ảnh. Hãy tách điểm dừng trước.
@@ -791,7 +922,340 @@ export default function TripTimelineMapScreen() {
                   </Pressable>
                 ))
               )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 3: PHOTO DETAIL LIGHTBOX + EXIF + QUICK MOVE TO ANOTHER STOP (UC-11) */}
+      <Modal
+        visible={inspectModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInspectModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.inspectModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.inspectTitleCol}>
+                <Text style={styles.inspectEyebrowText}>CHI TIẾT KHOẢNH KHẮC • EXIF</Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {inspectedStop?.name ?? 'Điểm dừng'}
+                </Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.modalCloseBtn, pressed && styles.pressed]}
+                onPress={() => setInspectModalVisible(false)}
+                hitSlop={TouchTarget.hitSlop}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng hộp thoại chi tiết ảnh">
+                <Feather name="x" size={IconSize.lg} color={Palette.textSecondary} />
+              </Pressable>
             </View>
+
+            {inspectedPhoto && (
+              <>
+                <View style={styles.inspectHeroImageWrap}>
+                  <Image
+                    source={{
+                      uri: inspectedPhoto.original_url || inspectedPhoto.thumbnail_url,
+                    }}
+                    style={styles.inspectHeroImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.inspectTopBadgeWrap}>
+                    <ExifStatusBadge hasGps={inspectedHasGps} />
+                  </View>
+                </View>
+
+                {/* Detailed EXIF Metadata Grid */}
+                <View style={styles.inspectExifGrid}>
+                  <View style={styles.inspectExifRow}>
+                    <Ionicons name="time-outline" size={IconSize.sm} color={Palette.teal700} />
+                    <Text style={styles.inspectExifLabel}>Thời gian chụp:</Text>
+                    <Text style={styles.inspectExifMonoValue}>
+                      {formatFullDateTime(inspectedPhoto.taken_at)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.inspectExifRow}>
+                    <Ionicons
+                      name="location-outline"
+                      size={IconSize.sm}
+                      color={inspectedHasGps ? Palette.emeraldText : Palette.amberText}
+                    />
+                    <Text style={styles.inspectExifLabel}>Tọa độ EXIF GPS:</Text>
+                    <Text
+                      style={[
+                        styles.inspectExifMonoValue,
+                        !inspectedHasGps && styles.inspectExifMissingText,
+                      ]}>
+                      {inspectedHasGps
+                        ? `${inspectedPhoto.latitude?.toFixed(5)}°N, ${inspectedPhoto.longitude?.toFixed(5)}°E`
+                        : 'null (GPS Unknown)'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.inspectExifRow}>
+                    <Ionicons name="flag-outline" size={IconSize.sm} color={Palette.coral600} />
+                    <Text style={styles.inspectExifLabel}>Điểm dừng hiện tại:</Text>
+                    <Text style={styles.inspectExifValue} numberOfLines={1}>
+                      #{inspectedStop?.global_index} • {inspectedStop?.name} (Ngày{' '}
+                      {inspectedStop?.day_number})
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Quick Move Photo to Another Stop (UC-11) */}
+                <View style={styles.quickMoveSection}>
+                  <Text style={styles.modalSubtitle}>
+                    Chuyển nhanh bức ảnh này sang Điểm dừng khác (UC-11):
+                  </Text>
+
+                  <ScrollView
+                    style={styles.quickMoveTargetsScroll}
+                    showsVerticalScrollIndicator={false}>
+                    {candidateTargetStopsForInspectedPhoto.length === 0 ? (
+                      <Text style={styles.emptyTargetHint}>
+                        Chuyến đi hiện chỉ có 1 điểm dừng. Hãy tách điểm dừng nếu muốn chuyển
+                        ảnh lẻ.
+                      </Text>
+                    ) : (
+                      candidateTargetStopsForInspectedPhoto.map((target) => (
+                        <Pressable
+                          key={target.stop_id}
+                          style={({ pressed }) => [
+                            styles.targetStopItem,
+                            pressed && styles.pressed,
+                          ]}
+                          onPress={() => handleQuickMoveFromInspectModal(target)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Chuyển ảnh sang ${target.name}`}>
+                          <NumberedMapMarker index={target.global_index} size="sm" />
+                          <View style={styles.targetStopInfo}>
+                            <Text style={styles.targetStopName}>{target.name}</Text>
+                            <Text style={styles.targetStopMeta}>
+                              Ngày {target.day_number} • {target.photos.length} ảnh
+                            </Text>
+                          </View>
+                          <View style={styles.quickMovePill}>
+                            <Text style={styles.quickMovePillText}>Chuyển tới</Text>
+                            <Feather
+                              name="corner-up-right"
+                              size={12}
+                              color={Palette.surface}
+                            />
+                          </View>
+                        </Pressable>
+                      ))
+                    )}
+                  </ScrollView>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 4: USABILITY EVALUATION REPORT (Phục vụ Báo cáo Mục 9.7) */}
+      <Modal
+        visible={usabilityModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUsabilityModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.usabilityModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.inspectTitleCol}>
+                <Text style={styles.usabilityEyebrowText}>
+                  ĐÁNH GIÁ THỰC NGHIỆM USABILITY • MỤC 9.7
+                </Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  Thống kê Tinh chỉnh Hành trình
+                </Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.modalCloseBtn, pressed && styles.pressed]}
+                onPress={() => setUsabilityModalVisible(false)}
+                hitSlop={TouchTarget.hitSlop}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng báo cáo Usability">
+                <Feather name="x" size={IconSize.lg} color={Palette.textSecondary} />
+              </Pressable>
+            </View>
+
+            {usabilityReport && (
+              <>
+                {/* Top Summary Strip */}
+                <View style={styles.usabilityOverviewStrip}>
+                  <View style={styles.usabilityOverviewCell}>
+                    <Text style={styles.usabilityBigNum}>{usabilityReport.total_edits}</Text>
+                    <Text style={styles.usabilityCellLabel}>Tổng thao tác</Text>
+                  </View>
+                  <View style={styles.usabilityOverviewCell}>
+                    <Text style={styles.usabilityBigNum}>
+                      {usabilityReport.initial_stop_count} &rarr;{' '}
+                      {usabilityReport.current_stop_count}
+                    </Text>
+                    <Text style={styles.usabilityCellLabel}>Điểm dừng (Đầu &rarr; Cuối)</Text>
+                  </View>
+                  <View style={styles.usabilityOverviewCell}>
+                    <Text style={styles.usabilityBigNum}>
+                      {usabilityReport.confirmed_stop_count}/
+                      {usabilityReport.current_stop_count}
+                    </Text>
+                    <Text style={styles.usabilityCellLabel}>Đã xác nhận</Text>
+                  </View>
+                </View>
+
+                {/* 5 Action Type Breakdown Grid */}
+                <View style={styles.actionBreakdownList}>
+                  <View style={styles.actionMetricRow}>
+                    <View style={styles.actionMetricLeft}>
+                      <Ionicons
+                        name="git-merge-outline"
+                        size={IconSize.sm}
+                        color={Palette.teal700}
+                      />
+                      <Text style={styles.actionMetricName}>
+                        MERGE — Gộp điểm dừng (UC-10)
+                      </Text>
+                    </View>
+                    <Text style={styles.actionMetricValue}>
+                      {usabilityReport.counts_by_action.MERGE} lần
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionMetricRow}>
+                    <View style={styles.actionMetricLeft}>
+                      <Ionicons
+                        name="git-branch-outline"
+                        size={IconSize.sm}
+                        color={Palette.indigo600}
+                      />
+                      <Text style={styles.actionMetricName}>
+                        SPLIT — Tách điểm dừng (UC-10)
+                      </Text>
+                    </View>
+                    <Text style={styles.actionMetricValue}>
+                      {usabilityReport.counts_by_action.SPLIT} lần
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionMetricRow}>
+                    <View style={styles.actionMetricLeft}>
+                      <Feather name="edit-3" size={IconSize.xs} color={Palette.amberText} />
+                      <Text style={styles.actionMetricName}>
+                        RENAME — Đổi tên sự kiện (UC-11)
+                      </Text>
+                    </View>
+                    <Text style={styles.actionMetricValue}>
+                      {usabilityReport.counts_by_action.RENAME} lần
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionMetricRow}>
+                    <View style={styles.actionMetricLeft}>
+                      <Ionicons
+                        name="swap-vertical-outline"
+                        size={IconSize.sm}
+                        color={Palette.coral600}
+                      />
+                      <Text style={styles.actionMetricName}>
+                        REORDER — Đổi thứ tự (UC-10)
+                      </Text>
+                    </View>
+                    <Text style={styles.actionMetricValue}>
+                      {usabilityReport.counts_by_action.REORDER} lần
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionMetricRow}>
+                    <View style={styles.actionMetricLeft}>
+                      <Ionicons
+                        name="images-outline"
+                        size={IconSize.sm}
+                        color={Palette.indigo600}
+                      />
+                      <Text style={styles.actionMetricName}>
+                        MOVE_PHOTO — Chuyển ảnh lẻ (UC-11)
+                      </Text>
+                    </View>
+                    <Text style={styles.actionMetricValue}>
+                      {usabilityReport.counts_by_action.MOVE_PHOTO} lần
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Recent Edit History Log */}
+                <View style={styles.historyLogBox}>
+                  <Text style={styles.historyLogHeading}>
+                    Nhật ký thao tác Human-in-the-Loop ({usabilityReport.history.length}):
+                  </Text>
+                  <ScrollView
+                    style={styles.historyLogScroll}
+                    showsVerticalScrollIndicator={false}>
+                    {usabilityReport.history.length === 0 ? (
+                      <Text style={styles.emptyTargetHint}>
+                        Chưa có thao tác chỉnh sửa nào trên chuyến đi này. Hãy thử Gộp, Tách,
+                        Đổi tên hoặc Chuyển ảnh để ghi nhận số liệu thực nghiệm.
+                      </Text>
+                    ) : (
+                      usabilityReport.history.map((entry, idx) => (
+                        <View key={entry.id} style={styles.historyLogItem}>
+                          <Text style={styles.historyLogIndex}>#{idx + 1}</Text>
+                          <View style={styles.historyLogTextCol}>
+                            <Text style={styles.historyLogDesc}>{entry.description}</Text>
+                            <Text style={styles.historyLogTime}>
+                              {entry.action} • {entry.timestamp.slice(11, 19)}
+                            </Text>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </ScrollView>
+                </View>
+
+                {copyFeedback && (
+                  <View style={styles.copySuccessBanner}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={IconSize.sm}
+                      color={Palette.emeraldText}
+                    />
+                    <Text style={styles.copySuccessText}>{copyFeedback}</Text>
+                  </View>
+                )}
+
+                {/* Copy Report Buttons (Markdown & JSON) */}
+                <View style={styles.usabilityExportRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.exportMarkdownBtn,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleCopyUsabilityMarkdown}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sao chép báo cáo Usability định dạng Markdown cho mục 9.7">
+                    <Feather name="copy" size={IconSize.sm} color={Palette.surface} />
+                    <Text style={styles.exportMarkdownBtnText}>
+                      Copy Báo cáo Markdown
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.exportJsonBtn,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleCopyUsabilityJson}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sao chép báo cáo Usability định dạng JSON">
+                    <Feather name="code" size={IconSize.sm} color={Palette.indigo700} />
+                    <Text style={styles.exportJsonBtnText}>Copy JSON</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -960,6 +1424,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mapRouteSummaryPill: {
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1083,9 +1548,9 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(24, 24, 27, 0.45)',
+    backgroundColor: 'rgba(24, 24, 27, 0.52)',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
   },
   modalCard: {
     backgroundColor: Palette.surface,
@@ -1096,10 +1561,47 @@ const styles = StyleSheet.create({
     borderColor: Palette.border,
     ...Shadows.floating,
   },
+  inspectModalCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.xxl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    maxHeight: '88%',
+    ...Shadows.floating,
+  },
+  usabilityModalCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.xxl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Palette.indigo100,
+    maxHeight: '88%',
+    ...Shadows.floating,
+  },
   modalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  inspectTitleCol: {
+    flex: 1,
+    gap: 2,
+  },
+  inspectEyebrowText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.teal700,
+    letterSpacing: 0.8,
+  },
+  usabilityEyebrowText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.indigo600,
+    letterSpacing: 0.8,
   },
   modalTitle: {
     fontFamily: SERIF_FONT,
@@ -1112,7 +1614,7 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Palette.textSecondary,
   },
   modalInput: {
@@ -1203,7 +1705,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   targetStopsList: {
-    gap: Spacing.sm,
     maxHeight: 220,
   },
   emptyTargetHint: {
@@ -1220,6 +1721,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Palette.border,
+    marginBottom: Spacing.sm,
   },
   targetStopInfo: {
     flex: 1,
@@ -1233,6 +1735,230 @@ const styles = StyleSheet.create({
   targetStopMeta: {
     fontSize: 11,
     color: Palette.textSecondary,
+  },
+  inspectHeroImageWrap: {
+    width: '100%',
+    height: 215,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: Palette.bgSecondary,
+    position: 'relative',
+  },
+  inspectHeroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  inspectTopBadgeWrap: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+  },
+  inspectExifGrid: {
+    backgroundColor: Palette.bgPrimary,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Palette.border,
+  },
+  inspectExifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inspectExifLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.textSecondary,
+  },
+  inspectExifValue: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+  },
+  inspectExifMonoValue: {
+    flex: 1,
+    fontFamily: MONO_FONT,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.emeraldText,
+  },
+  inspectExifMissingText: {
+    color: Palette.amberText,
+  },
+  quickMoveSection: {
+    gap: 8,
+  },
+  quickMoveTargetsScroll: {
+    maxHeight: 165,
+  },
+  quickMovePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Palette.teal700,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+  },
+  quickMovePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Palette.surface,
+  },
+  usabilityOverviewStrip: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  usabilityOverviewCell: {
+    flex: 1,
+    backgroundColor: Palette.indigo50,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Palette.indigo100,
+  },
+  usabilityBigNum: {
+    fontFamily: SERIF_FONT,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Palette.indigo700,
+  },
+  usabilityCellLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Palette.textSecondary,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  actionBreakdownList: {
+    backgroundColor: Palette.bgPrimary,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Palette.border,
+  },
+  actionMetricRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  actionMetricLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionMetricName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+  },
+  actionMetricValue: {
+    fontFamily: MONO_FONT,
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.indigo700,
+  },
+  historyLogBox: {
+    gap: 6,
+  },
+  historyLogHeading: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.textSecondary,
+  },
+  historyLogScroll: {
+    maxHeight: 130,
+    backgroundColor: Palette.bgPrimary,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Palette.border,
+  },
+  historyLogItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.border,
+  },
+  historyLogIndex: {
+    fontFamily: MONO_FONT,
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.indigo600,
+    marginTop: 2,
+  },
+  historyLogTextCol: {
+    flex: 1,
+  },
+  historyLogDesc: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+  },
+  historyLogTime: {
+    fontFamily: MONO_FONT,
+    fontSize: 10,
+    color: Palette.textMuted,
+  },
+  copySuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Palette.emeraldBg,
+    borderWidth: 1,
+    borderColor: Palette.emeraldBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+  },
+  copySuccessText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.emeraldText,
+  },
+  usabilityExportRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  exportMarkdownBtn: {
+    flex: 1,
+    minHeight: TouchTarget.minSize,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Palette.teal700,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.md,
+  },
+  exportMarkdownBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.surface,
+  },
+  exportJsonBtn: {
+    minHeight: TouchTarget.minSize,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Palette.indigo50,
+    borderWidth: 1,
+    borderColor: Palette.indigo100,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.lg,
+  },
+  exportJsonBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.indigo700,
   },
   pressed: {
     opacity: 0.78,

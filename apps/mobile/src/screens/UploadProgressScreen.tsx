@@ -1,7 +1,7 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,11 +16,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ExifStatusBadge } from '@/components/ui';
+import { clusterPhotosSpatioTemporal } from '@/services/mockApi';
 import {
-  createTripFromUploadedPhotos,
-  getJobStatus,
-  uploadTripPhotos,
-} from '@/services/mockApi';
+  loadSelectedDeviceBatch,
+  saveSelectedDeviceBatch,
+} from '@/services/storage';
+import { tripRepository } from '@/services/tripRepository';
 import {
   IconSize,
   MONO_FONT,
@@ -60,7 +61,7 @@ const SAMPLE_EXIF_PHOTOS: PhotoItem[] = [
       'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80',
     original_url:
       'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=85',
-    taken_at: '2026-10-24T12:20:00+07:00',
+    taken_at: '2026-10-24T09:40:00+07:00',
     latitude: null,
     longitude: null,
   },
@@ -91,8 +92,8 @@ const SAMPLE_EXIF_PHOTOS: PhotoItem[] = [
     original_url:
       'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=1200&q=85',
     taken_at: '2026-10-25T11:40:00+07:00',
-    latitude: null,
-    longitude: null,
+    latitude: 10.3412,
+    longitude: 107.0725,
   },
 ];
 
@@ -102,6 +103,11 @@ function parseExifCoordinate(rawCoord: unknown, ref?: unknown): number | null {
 
   if (typeof rawCoord === 'number' && !Number.isNaN(rawCoord) && rawCoord !== 0) {
     numericValue = rawCoord;
+  } else if (typeof rawCoord === 'string') {
+    const parsed = Number.parseFloat(rawCoord);
+    if (!Number.isNaN(parsed) && parsed !== 0) {
+      numericValue = parsed;
+    }
   } else if (Array.isArray(rawCoord) && rawCoord.length >= 2) {
     const deg = Number(rawCoord[0]) || 0;
     const min = Number(rawCoord[1]) || 0;
@@ -113,20 +119,61 @@ function parseExifCoordinate(rawCoord: unknown, ref?: unknown): number | null {
   }
 
   if (numericValue === null) return null;
-  if ((ref === 'S' || ref === 'W') && numericValue > 0) {
+  const refStr = typeof ref === 'string' ? ref.toUpperCase() : '';
+  if ((refStr === 'S' || refStr === 'W') && numericValue > 0) {
     numericValue = -numericValue;
   }
   return Number(numericValue.toFixed(5));
 }
 
+function extractGpsFromExifObject(
+  exif: Record<string, unknown> | null | undefined
+): { lat: number | null; lng: number | null } {
+  if (!exif) return { lat: null, lng: null };
+
+  const nestedGps = (exif['{GPS}'] as Record<string, unknown> | undefined) ?? undefined;
+  const rawLat =
+    exif.GPSLatitude ??
+    nestedGps?.Latitude ??
+    nestedGps?.GPSLatitude ??
+    exif.latitude ??
+    exif.lat;
+  const rawLatRef =
+    exif.GPSLatitudeRef ?? nestedGps?.LatitudeRef ?? nestedGps?.GPSLatitudeRef;
+
+  const rawLng =
+    exif.GPSLongitude ??
+    nestedGps?.Longitude ??
+    nestedGps?.GPSLongitude ??
+    exif.longitude ??
+    exif.lng;
+  const rawLngRef =
+    exif.GPSLongitudeRef ?? nestedGps?.LongitudeRef ?? nestedGps?.GPSLongitudeRef;
+
+  const lat = parseExifCoordinate(rawLat, rawLatRef);
+  const lng = parseExifCoordinate(rawLng, rawLngRef);
+
+  if (lat !== null && lng !== null) {
+    return { lat, lng };
+  }
+  return { lat: null, lng: null };
+}
+
 function parseExifDateTime(
   exif: Record<string, unknown> | null | undefined,
+  fileName: string | null | undefined,
   index: number
 ): string {
+  const nestedExif = (exif?.['{Exif}'] as Record<string, unknown> | undefined) ?? undefined;
+  const nestedTiff = (exif?.['{TIFF}'] as Record<string, unknown> | undefined) ?? undefined;
+
   const rawDate =
     (exif?.DateTimeOriginal as string | undefined) ||
     (exif?.DateTimeDigitized as string | undefined) ||
-    (exif?.DateTime as string | undefined);
+    (exif?.DateTime as string | undefined) ||
+    (nestedExif?.DateTimeOriginal as string | undefined) ||
+    (nestedExif?.DateTimeDigitized as string | undefined) ||
+    (nestedTiff?.DateTime as string | undefined);
 
   if (rawDate && typeof rawDate === 'string') {
     const normalized = rawDate
@@ -139,6 +186,15 @@ function parseExifDateTime(
     }
   }
 
+  // Fallback trích xuất ngày giờ từ tên file ảnh chụp trên điện thoại (VD: IMG_20261024_083015.jpg)
+  if (fileName && typeof fileName === 'string') {
+    const match = fileName.match(/(\d{4})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})/);
+    if (match) {
+      const [, y, m, d, hh, mm, ss] = match;
+      return `${y}-${m}-${d}T${hh}:${mm}:${ss}+07:00`;
+    }
+  }
+
   const hour = String(8 + (index % 10)).padStart(2, '0');
   const min = String((index * 12) % 60).padStart(2, '0');
   return `2026-10-24T${hour}:${min}:00+07:00`;
@@ -148,7 +204,7 @@ const PIPELINE_STEPS = [
   {
     step: 1,
     title: 'Đọc & Chuẩn hóa EXIF Metadata',
-    desc: 'Trích xuất DateTimeOriginal & tọa độ GPS, giữ nguyên null cho ảnh thiếu GPS',
+    desc: 'Trích xuất DateTimeOriginal & tọa độ GPS thật, giữ nguyên null cho ảnh thiếu GPS',
     threshold: 25,
     icon: 'compass-outline' as const,
   },
@@ -161,15 +217,15 @@ const PIPELINE_STEPS = [
   },
   {
     step: 3,
-    title: 'Phân cụm Không gian - Thời gian',
-    desc: 'Tự động gom nhóm điểm dừng theo khoảng cách địa lý & ngưỡng thời gian',
+    title: 'Phân cụm Không gian - Thời gian (Haversine)',
+    desc: 'Tự động gom nhóm điểm dừng theo bán kính Haversine (<=350m) & ngưỡng thời gian (<=180p)',
     threshold: 85,
     icon: 'git-network-outline' as const,
   },
   {
     step: 4,
-    title: 'Dựng Bản đồ & Dòng thời gian',
-    desc: 'Khởi tạo ấn phẩm hành trình kèm đường nối Polyline và thanh công cụ tinh chỉnh',
+    title: 'Lưu trữ Bền vững & Dựng Bản đồ',
+    desc: 'Ghi vào AsyncStorage, khởi tạo ấn phẩm hành trình kèm đường nối Polyline',
     threshold: 100,
     icon: 'map-outline' as const,
   },
@@ -182,11 +238,28 @@ export default function UploadProgressScreen() {
   const [tripTitle, setTripTitle] = useState<string>('Ký ức Biển Đảo • Ấn phẩm mới');
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoItem[]>(SAMPLE_EXIF_PHOTOS);
   const [pickerSourceLabel, setPickerSourceLabel] = useState<string>(
-    'Bộ ảnh mẫu chuẩn EXIF (4 ảnh có GPS • 2 ảnh khuyết GPS)'
+    'Bộ ảnh mẫu chuẩn EXIF (5 ảnh có GPS • 1 ảnh khuyết GPS)'
   );
   const [job, setJob] = useState<ProcessingJobResponse | null>(null);
   const [isRunningPipeline, setIsRunningPipeline] = useState<boolean>(false);
   const [createdTripId, setCreatedTripId] = useState<string | null>(null);
+
+  // Phục hồi lô ảnh đã chọn từ thiết bị trong AsyncStorage nếu có
+  useEffect(() => {
+    let mounted = true;
+    loadSelectedDeviceBatch().then((saved) => {
+      if (mounted && saved && saved.photos.length > 0) {
+        setSelectedPhotos(saved.photos);
+        setPickerSourceLabel(saved.sourceLabel);
+        if (saved.title) {
+          setTripTitle(saved.title);
+        }
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const exifStats = useMemo(() => {
     const total = selectedPhotos.length;
@@ -196,6 +269,21 @@ export default function UploadProgressScreen() {
     const unknownGps = total - validGps;
     const coveragePercent = total > 0 ? Math.round((validGps / total) * 100) : 0;
     return { total, validGps, unknownGps, coveragePercent };
+  }, [selectedPhotos]);
+
+  // Xem trước kết quả phân cụm Spatio-Temporal thực tế (Haversine + Temporal) ngay khi chọn ảnh
+  const clusterPreview = useMemo(() => {
+    const { days } = clusterPhotosSpatioTemporal('preview', selectedPhotos, {
+      maxDistanceMeters: 350,
+      maxTimeGapMinutes: 180,
+      missingGpsTimeThresholdMinutes: 90,
+    });
+    const totalStops = days.reduce((acc, d) => acc + d.stops.length, 0);
+    return {
+      daysCount: days.length,
+      stopsCount: totalStops,
+      days,
+    };
   }, [selectedPhotos]);
 
   const handlePickRealPhotosFromDevice = async () => {
@@ -221,26 +309,34 @@ export default function UploadProgressScreen() {
         return;
       }
 
+      const batchSeed = Date.now().toString().slice(-4);
       const mappedPhotos: PhotoItem[] = result.assets.map((asset, idx) => {
         const exifData = (asset.exif ?? null) as Record<string, unknown> | null;
-        const lat = parseExifCoordinate(exifData?.GPSLatitude, exifData?.GPSLatitudeRef);
-        const lng = parseExifCoordinate(exifData?.GPSLongitude, exifData?.GPSLongitudeRef);
-        const takenAt = parseExifDateTime(exifData, idx);
+        const { lat, lng } = extractGpsFromExifObject(exifData);
+        const takenAt = parseExifDateTime(exifData, asset.fileName, idx);
 
         return {
-          photo_id: `dev_${idx + 1}`,
+          photo_id: `dev_${batchSeed}_${idx + 1}`,
           thumbnail_url: asset.uri,
           original_url: asset.uri,
           taken_at: takenAt,
-          latitude: lat !== null && lng !== null ? lat : null,
-          longitude: lat !== null && lng !== null ? lng : null,
+          latitude: lat,
+          longitude: lng,
         };
       });
 
+      const newLabel = `Thư viện Thiết bị (${mappedPhotos.length} bức ảnh thực tế • Đã lưu AsyncStorage)`;
       setSelectedPhotos(mappedPhotos);
-      setPickerSourceLabel(`Thư viện Thiết bị (${mappedPhotos.length} bức ảnh thực tế)`);
+      setPickerSourceLabel(newLabel);
       setJob(null);
       setCreatedTripId(null);
+
+      await saveSelectedDeviceBatch({
+        title: tripTitle,
+        sourceLabel: newLabel,
+        photos: mappedPhotos,
+        savedAt: new Date().toISOString(),
+      });
     } catch {
       Alert.alert(
         'Không thể mở Thư viện ảnh',
@@ -249,11 +345,19 @@ export default function UploadProgressScreen() {
     }
   };
 
-  const handleLoadSampleExifBatch = () => {
+  const handleLoadSampleExifBatch = async () => {
+    const defaultLabel = 'Bộ ảnh mẫu chuẩn EXIF (5 ảnh có GPS • 1 ảnh khuyết GPS)';
     setSelectedPhotos(SAMPLE_EXIF_PHOTOS);
-    setPickerSourceLabel('Bộ ảnh mẫu chuẩn EXIF (4 ảnh có GPS • 2 ảnh khuyết GPS)');
+    setPickerSourceLabel(defaultLabel);
     setJob(null);
     setCreatedTripId(null);
+
+    await saveSelectedDeviceBatch({
+      title: tripTitle,
+      sourceLabel: defaultLabel,
+      photos: SAMPLE_EXIF_PHOTOS,
+      savedAt: new Date().toISOString(),
+    });
   };
 
   const handleStartAutoIndexing = async () => {
@@ -263,21 +367,28 @@ export default function UploadProgressScreen() {
 
     try {
       const uris = selectedPhotos.map((p) => p.original_url);
-      const initialJob = await uploadTripPhotos(baseTripId, uris);
+      const initialJob = await tripRepository.uploadTripPhotos(baseTripId, uris);
       setJob(initialJob);
 
-      const step55 = await getJobStatus(initialJob.job_id, 55, baseTripId);
+      const step55 = await tripRepository.getJobStatus(initialJob.job_id, 55, baseTripId);
       setJob(step55);
 
-      const step85 = await getJobStatus(initialJob.job_id, 85, baseTripId);
+      const step85 = await tripRepository.getJobStatus(initialJob.job_id, 85, baseTripId);
       setJob(step85);
 
-      const newTripTimeline = await createTripFromUploadedPhotos({
+      const newTripTimeline = await tripRepository.createTripFromUploadedPhotos({
         title: tripTitle,
         photos: selectedPhotos,
       });
 
-      const step100 = await getJobStatus(
+      await saveSelectedDeviceBatch({
+        title: tripTitle,
+        sourceLabel: pickerSourceLabel,
+        photos: selectedPhotos,
+        savedAt: new Date().toISOString(),
+      });
+
+      const step100 = await tripRepository.getJobStatus(
         initialJob.job_id,
         100,
         newTripTimeline.trip_id
@@ -311,18 +422,18 @@ export default function UploadProgressScreen() {
 
           <View style={styles.studioLightPill}>
             <View style={styles.studioTealDot} />
-            <Text style={styles.studioLightPillText}>THÊM ẢNH HÀNH TRÌNH</Text>
+            <Text style={styles.studioLightPillText}>THÊM ẢNH HÀNH TRÌNH • EXIF</Text>
           </View>
         </View>
 
-        {/* Luminous Gallery White Studio Import Card (No Dark Background!) */}
+        {/* Luminous Gallery White Studio Import Card */}
         <View style={styles.lightStudioCard}>
           <Text style={styles.studioSerifTitle}>
-            Khởi tạo Hành trình từ Thư viện Ảnh
+            Khởi tạo Hành trình từ Thư viện Ảnh Thật
           </Text>
           <Text style={styles.studioSubtitle}>
-            Chọn nhiều ảnh từ thiết bị để tự động kiểm tra tọa độ GPS, thời gian chụp và
-            dựng bản đồ hành trình.
+            Chọn nhiều ảnh từ điện thoại để trích xuất DateTimeOriginal & tọa độ GPS gốc, tự
+            động phân cụm Spatio-Temporal (Haversine) và lưu bền vững vào AsyncStorage.
           </Text>
 
           <View style={styles.titleInputBox}>
@@ -360,7 +471,7 @@ export default function UploadProgressScreen() {
               ]}
               onPress={handleLoadSampleExifBatch}
               accessibilityRole="button"
-              accessibilityLabel="Nạp bộ ảnh mẫu EXIF">
+              accessibilityLabel="Khôi phục bộ ảnh mẫu EXIF">
               <Feather name="refresh-cw" size={IconSize.xs} color={Palette.teal700} />
               <Text style={styles.sampleBatchSecondaryText}>Ảnh mẫu</Text>
             </Pressable>
@@ -413,6 +524,21 @@ export default function UploadProgressScreen() {
                 ]}
               />
             </View>
+          </View>
+
+          {/* Spatio-Temporal Haversine Clustering Live Preview */}
+          <View style={styles.clusterPreviewBanner}>
+            <View style={styles.clusterPreviewTopRow}>
+              <Ionicons name="git-network-outline" size={IconSize.sm} color={Palette.teal700} />
+              <Text style={styles.clusterPreviewTitle}>
+                Dự kiến Phân cụm Spatio-Temporal: {clusterPreview.daysCount} ngày •{' '}
+                {clusterPreview.stopsCount} điểm dừng
+              </Text>
+            </View>
+            <Text style={styles.clusterPreviewDesc}>
+              Thuật toán Haversine (bán kính &le; 350m, ngưỡng thời gian &le; 180 phút) tự động
+              tính tâm Centroid thật cho từng cụm điểm dừng.
+            </Text>
           </View>
         </View>
 
@@ -534,7 +660,7 @@ export default function UploadProgressScreen() {
               <>
                 <ActivityIndicator size="small" color={Palette.surface} />
                 <Text style={styles.runPipelineCtaText}>
-                  Đang phân cụm & dựng hành trình...
+                  Đang phân cụm Haversine & dựng hành trình...
                 </Text>
               </>
             ) : (
@@ -801,8 +927,32 @@ const styles = StyleSheet.create({
   },
   coverageFill: {
     height: '100%',
-    backgroundColor: Palette.teal600,
+    backgroundColor: Palette.emeraldDot,
     borderRadius: Radius.pill,
+  },
+  clusterPreviewBanner: {
+    backgroundColor: Palette.teal50,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: 4,
+  },
+  clusterPreviewTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  clusterPreviewTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.teal800,
+    flex: 1,
+  },
+  clusterPreviewDesc: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: Palette.textSecondary,
   },
   filmstripSection: {
     gap: Spacing.md,
@@ -821,18 +971,18 @@ const styles = StyleSheet.create({
   sectionSubCount: {
     fontSize: 12,
     fontWeight: '700',
-    color: Palette.textMuted,
+    color: Palette.textSubtle,
   },
   photoGridWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: Spacing.md,
+    rowGap: Spacing.md,
   },
   filmCard: {
-    width: '47.8%',
+    width: '48.2%',
     backgroundColor: Palette.surface,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Palette.border,
@@ -840,7 +990,7 @@ const styles = StyleSheet.create({
   },
   filmImageContainer: {
     width: '100%',
-    height: 128,
+    height: 118,
     position: 'relative',
     backgroundColor: Palette.bgSecondary,
   },
@@ -850,16 +1000,16 @@ const styles = StyleSheet.create({
   },
   filmTopLeftBadge: {
     position: 'absolute',
-    top: 7,
-    left: 7,
+    top: 8,
+    left: 8,
   },
   filmIndexPill: {
     position: 'absolute',
-    bottom: 7,
-    right: 7,
+    bottom: 8,
+    right: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
     paddingHorizontal: 7,
-    paddingVertical: 2.5,
+    paddingVertical: 2,
     borderRadius: Radius.pill,
   },
   filmIndexText: {
@@ -917,7 +1067,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Palette.teal100,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: Radius.pill,
   },
   progressBadgeText: {
@@ -933,7 +1083,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: Palette.teal700,
+    backgroundColor: Palette.teal600,
     borderRadius: Radius.pill,
   },
   stepsContainer: {
@@ -945,11 +1095,12 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   stepCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   stepCircleDone: {
     backgroundColor: Palette.teal700,
@@ -963,16 +1114,17 @@ const styles = StyleSheet.create({
   },
   stepTitleText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: Palette.textSecondary,
   },
   stepTitleTextDone: {
     color: Palette.textPrimary,
+    fontWeight: '800',
   },
   stepDescText: {
     fontSize: 12,
     lineHeight: 17,
-    color: Palette.textSubtle,
+    color: Palette.textMuted,
   },
   runPipelineCtaBtn: {
     minHeight: 52,
@@ -983,6 +1135,7 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.teal700,
     borderRadius: Radius.pill,
     paddingHorizontal: Spacing.xl,
+    marginTop: 4,
     ...Shadows.floating,
   },
   runPipelineCtaText: {
@@ -1002,7 +1155,7 @@ const styles = StyleSheet.create({
     borderColor: Palette.teal100,
   },
   openCreatedTripBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: Palette.teal700,
   },
@@ -1010,6 +1163,6 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.78,
   },
 });

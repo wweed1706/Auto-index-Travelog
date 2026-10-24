@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SemanticPhotoCard } from '@/components/ui';
-import { searchPhotosSemantic } from '@/services/mockApi';
+import { tripRepository } from '@/services/tripRepository';
 import {
   IconSize,
   Palette,
@@ -24,7 +24,7 @@ import {
   Spacing,
   TouchTarget,
 } from '@/theme';
-import { SemanticSearchResultItem } from '@/types/trip';
+import { SemanticSearchResultItem, TripSummary } from '@/types/trip';
 
 const NATURAL_QUERY_SUGGESTIONS: string[] = [
   'hoàng hôn trên biển',
@@ -40,6 +40,7 @@ export default function SemanticSearchScreen() {
   const [tripIdFilter, setTripIdFilter] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [results, setResults] = useState<SemanticSearchResultItem[]>([]);
+  const [availableTrips, setAvailableTrips] = useState<TripSummary[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
   const executeSearch = useCallback(
@@ -50,7 +51,7 @@ export default function SemanticSearchScreen() {
     ) => {
       setLoading(true);
       try {
-        const response = await searchPhotosSemantic({
+        const response = await tripRepository.searchPhotosSemantic({
           query: customQuery,
           trip_id: customTripId,
           date_from: customDate,
@@ -66,6 +67,7 @@ export default function SemanticSearchScreen() {
   );
 
   useEffect(() => {
+    tripRepository.getTrips().then(setAvailableTrips);
     executeSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -105,7 +107,7 @@ export default function SemanticSearchScreen() {
         </Pressable>
       </View>
 
-      {/* Luminous Light Indigo AI Spotlight Hero Card (No Dark Background!) */}
+      {/* Luminous Light Indigo AI Spotlight Hero Card */}
       <View style={styles.lightHeroCard}>
         <View style={styles.heroTitleGroup}>
           <Text style={styles.heroSerifTitle}>
@@ -228,65 +230,39 @@ export default function SemanticSearchScreen() {
           </Text>
         </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.filterPill,
-            tripIdFilter === 'trip_123' && styles.filterPillActive,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => {
-            const nextTrip = tripIdFilter === 'trip_123' ? null : 'trip_123';
-            setTripIdFilter(nextTrip);
-            executeSearch(query, nextTrip, dateFilter);
-          }}
-          accessibilityRole="button"
-          accessibilityState={{ selected: tripIdFilter === 'trip_123' }}
-          accessibilityLabel="Lọc chuyến đi Vũng Tàu">
-          <Ionicons
-            name="sunny-outline"
-            size={IconSize.xs}
-            color={
-              tripIdFilter === 'trip_123' ? Palette.surface : Palette.textSecondary
-            }
-          />
-          <Text
-            style={[
-              styles.filterPillText,
-              tripIdFilter === 'trip_123' && styles.filterPillTextActive,
-            ]}>
-            Vũng Tàu
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.filterPill,
-            tripIdFilter === 'trip_124' && styles.filterPillActive,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => {
-            const nextTrip = tripIdFilter === 'trip_124' ? null : 'trip_124';
-            setTripIdFilter(nextTrip);
-            executeSearch(query, nextTrip, dateFilter);
-          }}
-          accessibilityRole="button"
-          accessibilityState={{ selected: tripIdFilter === 'trip_124' }}
-          accessibilityLabel="Lọc chuyến đi Đà Lạt">
-          <Ionicons
-            name="leaf-outline"
-            size={IconSize.xs}
-            color={
-              tripIdFilter === 'trip_124' ? Palette.surface : Palette.textSecondary
-            }
-          />
-          <Text
-            style={[
-              styles.filterPillText,
-              tripIdFilter === 'trip_124' && styles.filterPillTextActive,
-            ]}>
-            Đà Lạt
-          </Text>
-        </Pressable>
+        {availableTrips.map((trip) => {
+          const isSelected = tripIdFilter === trip.trip_id;
+          return (
+            <Pressable
+              key={trip.trip_id}
+              style={({ pressed }) => [
+                styles.filterPill,
+                isSelected && styles.filterPillActive,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                const nextTrip = isSelected ? null : trip.trip_id;
+                setTripIdFilter(nextTrip);
+                executeSearch(query, nextTrip, dateFilter);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`Lọc chuyến đi ${trip.title}`}>
+              <Ionicons
+                name="compass-outline"
+                size={IconSize.xs}
+                color={isSelected ? Palette.surface : Palette.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.filterPillText,
+                  isSelected && styles.filterPillTextActive,
+                ]}>
+                {trip.title}
+              </Text>
+            </Pressable>
+          );
+        })}
 
         <Pressable
           style={({ pressed }) => [
@@ -455,12 +431,6 @@ const styles = StyleSheet.create({
   },
   heroTitleGroup: {
     gap: 6,
-  },
-  heroEyebrow: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Palette.indigo600,
-    letterSpacing: 1,
   },
   heroSerifTitle: {
     fontFamily: SERIF_FONT,
