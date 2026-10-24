@@ -1,39 +1,21 @@
-# Use Case Catalog — ReTrip v1.0
+# Danh mục Ca sử dụng (Use Case Catalog) — ReTrip v2.0
 
-**Actors:** Guest, Registered User, Photo Library/OS, Map Service, AI Service, Public Viewer.  
-**Note:** Auto-Indexing Engine and background workers are **internal components**, not external UML actors.
+**Tác nhân (Actors):** Người dùng đã đăng ký (Registered User), Thư viện ảnh/OS, Dịch vụ Bản đồ (Map Service).
+*(Lưu ý: Auto-Indexing Engine và mô hình CLIP là thành phần nội bộ của hệ thống).*
 
-| ID | Use case | Priority |
-| --- | --- | --- |
-| UC-01 | Register account | P0 |
-| UC-02 | Log in / log out | P0 |
-| UC-03 | Manage trips | P0 |
-| UC-04 | Select multiple photos | P0 |
-| UC-05 | Upload and store photos | P0 |
-| UC-06 | Extract and normalize metadata | P0 |
-| UC-07 | Detect identical/near-duplicate photos | P0 |
-| UC-08 | Auto-index and reconstruct travel events | P0 |
-| UC-09 | Handle incomplete metadata | P0 |
-| UC-10 | Review Unassigned photos | P0 |
-| UC-11 | View event timeline | P0 |
-| UC-12 | View stops on a map | P0 |
-| UC-13 | Edit travel events | P0 |
-| UC-14 | Merge/split events | P0 |
-| UC-15 | Move photos between events | P0 |
-| UC-16 | Confirm/correct inferred fields | P0 |
-| UC-17 | Re-run indexing with preserved corrections | P0 |
-| UC-18 | Generate grounded AI journal draft | P1 |
-| UC-19 | Edit journal | P1 |
-| UC-20 | Share trip read-only | P1 |
-| UC-21 | Revoke sharing / privacy control | P1 |
-| UC-22 | View processing status and retry | P0 |
-
-## High-risk acceptance scenarios
-
-- **UC-08:** Unusable time/GPS leaves a photo Unassigned; the job remains reportable.
-- **UC-09:** No GPS does not mean a geographical distance of zero.
-- **UC-17:** User-confirmed edits override later inferred results.
-- **UC-18:** AI cannot assert unverified place names or activities as facts.
-- **UC-20/21:** Private by default; revoked links stop working.
-
-These are high-level use cases. Detailed main/alternate/exception flows belong in the SRS.
+| Mã UC | Tên Ca sử dụng (Use Case) | Độ ưu tiên | Trụ cột |
+| :--- | :--- | :--- | :--- |
+| **UC-01** | Đăng ký / Đăng nhập tài khoản | P0 | Nền tảng |
+| **UC-02** | Tạo và quản lý chuyến đi (Trips) | P0 | Nền tảng |
+| **UC-03** | Chọn hàng loạt ảnh từ thiết bị | P0 | Trụ cột 1 |
+| **UC-04** | Tải ảnh lên và lưu trữ (Object Storage) | P0 | Trụ cột 1 |
+| **UC-05** | Trích xuất và chuẩn hóa metadata EXIF | P0 | Trụ cột 1 |
+| **UC-06** | Phân cụm không gian - thời gian & Tái dựng điểm dừng | P0 | Trụ cột 1 |
+| **UC-07** | Theo dõi tiến trình xử lý ảnh (Indexing status) | P0 | Trụ cột 1 |
+| **UC-08** | Xem hành trình theo Dòng thời gian (Timeline) | P0 | Trụ cột 1 |
+| **UC-09** | Xem các điểm dừng và tuyến hành trình trên Bản đồ | P0 | Trụ cột 1 |
+| **UC-10** | Gộp, tách hoặc đổi thứ tự các điểm dừng (Human-in-the-Loop) | P0 | Trụ cột 1 |
+| **UC-11** | Di chuyển ảnh giữa các điểm dừng và đổi tên sự kiện | P0 | Trụ cột 1 |
+| **UC-12** | Trích xuất đặc trưng ảnh (CLIP Embedding) | P0 | Trụ cột 2 |
+| **UC-13** | Tìm kiếm ảnh bằng ngôn ngữ tự nhiên kết hợp bộ lọc | P0 | Trụ cột 2 |
+| **UC-14** | Xem kết quả tìm kiếm gắn với ngày và điểm dừng liên quan | P0 | Trụ cột 2 |
