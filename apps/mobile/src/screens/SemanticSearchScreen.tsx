@@ -1,10 +1,9 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,8 +13,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Palette, Radius, Shadows } from '@/constants/designSystem';
+import { SemanticPhotoCard } from '@/components/ui';
 import { searchPhotosSemantic } from '@/services/mockApi';
+import {
+  IconSize,
+  Palette,
+  Radius,
+  SERIF_FONT,
+  Shadows,
+  Spacing,
+  TouchTarget,
+} from '@/theme';
 import { SemanticSearchResultItem } from '@/types/trip';
 
 const NATURAL_QUERY_SUGGESTIONS: string[] = [
@@ -27,12 +35,6 @@ const NATURAL_QUERY_SUGGESTIONS: string[] = [
   'rừng thông sương mù Đà Lạt',
 ];
 
-function formatTimeHm(isoStr: string): string {
-  if (!isoStr) return '--:--';
-  const timePart = isoStr.includes('T') ? isoStr.split('T')[1] : isoStr;
-  return timePart ? timePart.slice(0, 5) : '--:--';
-}
-
 export default function SemanticSearchScreen() {
   const [query, setQuery] = useState<string>('hoàng hôn trên biển');
   const [tripIdFilter, setTripIdFilter] = useState<string | null>(null);
@@ -40,25 +42,28 @@ export default function SemanticSearchScreen() {
   const [results, setResults] = useState<SemanticSearchResultItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const executeSearch = async (
-    customQuery = query,
-    customTripId = tripIdFilter,
-    customDate = dateFilter
-  ) => {
-    setLoading(true);
-    try {
-      const response = await searchPhotosSemantic({
-        query: customQuery,
-        trip_id: customTripId,
-        date_from: customDate,
-        date_to: customDate,
-        top_k: 20,
-      });
-      setResults(response.results);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const executeSearch = useCallback(
+    async (
+      customQuery = query,
+      customTripId = tripIdFilter,
+      customDate = dateFilter
+    ) => {
+      setLoading(true);
+      try {
+        const response = await searchPhotosSemantic({
+          query: customQuery,
+          trip_id: customTripId,
+          date_from: customDate,
+          date_to: customDate,
+          top_k: 20,
+        });
+        setResults(response.results);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [dateFilter, query, tripIdFilter]
+  );
 
   useEffect(() => {
     executeSearch();
@@ -70,61 +75,90 @@ export default function SemanticSearchScreen() {
     executeSearch(suggestedText, tripIdFilter, dateFilter);
   };
 
+  const handleOpenResultTrip = useCallback((item: SemanticSearchResultItem) => {
+    router.push({ pathname: '/trips/[tripId]', params: { tripId: item.trip_id } });
+  }, []);
+
   const renderHeader = () => (
     <View style={styles.headerBlock}>
       {/* Top Bar */}
-      <View style={styles.topBar}>
-        <View style={styles.topBarLeft}>
-          <View style={styles.pillarBadge}>
-            <Ionicons name="sparkles" size={12} color={Palette.indigo600} />
-            <Text style={styles.pillarBadgeText}>TRỤ CỘT 2 • PYTORCH + CLIP + PGVECTOR</Text>
-          </View>
-          <Text style={styles.screenTitle}>Tìm kiếm Ngữ nghĩa AI</Text>
+      <View style={styles.topNavRow}>
+        <Pressable
+          style={({ pressed }) => [styles.backCircleBtn, pressed && styles.pressed]}
+          onPress={() => router.push('/')}
+          accessibilityRole="button"
+          accessibilityLabel="Quay về trang chủ Nhật ký">
+          <Feather name="arrow-left" size={IconSize.md} color={Palette.textPrimary} />
+        </Pressable>
+
+        <View style={styles.topCenterKicker}>
+          <Ionicons name="sparkles" size={12} color={Palette.indigo600} />
+          <Text style={styles.topCenterKickerText}>Tìm kiếm</Text>
         </View>
 
-        <Pressable style={styles.homePillBtn} onPress={() => router.push('/')}>
-          <Ionicons name="compass-outline" size={16} color={Palette.textPrimary} />
-          <Text style={styles.homePillText}>Hành trình</Text>
+        <Pressable
+          style={({ pressed }) => [styles.uploadShortcutBtn, pressed && styles.pressed]}
+          onPress={() => router.push('/upload')}
+          accessibilityRole="button"
+          accessibilityLabel="Nhập ảnh mới">
+          <Feather name="plus" size={IconSize.sm} color={Palette.teal700} />
         </Pressable>
       </View>
 
-      {/* Spotlight Search Card */}
-      <View style={styles.spotlightCard}>
-        <View style={styles.spotlightInputRow}>
-          <View style={styles.sparkleIconBox}>
-            <Ionicons name="sparkles" size={18} color={Palette.indigo600} />
+      {/* Luminous Light Indigo AI Spotlight Hero Card (No Dark Background!) */}
+      <View style={styles.lightHeroCard}>
+        <View style={styles.heroTitleGroup}>
+          <Text style={styles.heroSerifTitle}>
+            Tìm lại khoảnh khắc bằng ngôn ngữ tự nhiên
+          </Text>
+        </View>
+
+        {/* Gallery White Spotlight Input Bar */}
+        <View style={styles.spotlightInputContainer}>
+          <View style={styles.sparkleBadgeCircle}>
+            <Ionicons name="sparkles" size={IconSize.md} color={Palette.indigo600} />
           </View>
 
           <TextInput
-            style={styles.searchInput}
+            style={styles.queryTextInput}
             value={query}
             onChangeText={setQuery}
             onSubmitEditing={() => executeSearch()}
             returnKeyType="search"
-            placeholder="Mô tả bức ảnh bằng tiếng Việt tự nhiên..."
+            placeholder="Mô tả cảnh vật, món ăn, thời điểm..."
             placeholderTextColor={Palette.textMuted}
+            accessibilityLabel="Câu truy vấn tìm kiếm ảnh bằng ngôn ngữ tự nhiên"
           />
 
           {query.length > 0 && (
             <Pressable
-              style={styles.clearInputBtn}
+              style={({ pressed }) => [styles.clearIconBtn, pressed && styles.pressed]}
               onPress={() => {
                 setQuery('');
                 executeSearch('', tripIdFilter, dateFilter);
               }}
-              hitSlop={8}>
-              <Ionicons name="close-circle" size={19} color={Palette.textMuted} />
+              hitSlop={TouchTarget.hitSlop}
+              accessibilityRole="button"
+              accessibilityLabel="Xóa nội dung tìm kiếm">
+              <Ionicons name="close-circle" size={IconSize.lg} color={Palette.textMuted} />
             </Pressable>
           )}
 
-          <Pressable style={styles.searchTriggerBtn} onPress={() => executeSearch()}>
-            <Feather name="search" size={16} color={Palette.textInverse} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.submitSearchCircle,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => executeSearch()}
+            accessibilityRole="button"
+            accessibilityLabel="Thực hiện tìm kiếm CLIP">
+            <Feather name="arrow-right" size={IconSize.md} color={Palette.surface} />
           </Pressable>
         </View>
 
-        {/* Suggestion Chips (Gợi ý thông minh 1 chạm) */}
-        <View style={styles.suggestionsSection}>
-          <Text style={styles.sectionMiniLabel}>Gợi ý câu truy vấn tiếng Việt tự nhiên:</Text>
+        {/* Horizontal One-Tap Suggestion Chips */}
+        <View style={styles.suggestionsGroup}>
+          <Text style={styles.suggestionsLabel}>Gợi ý truy vấn 1 chạm:</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -134,15 +168,19 @@ export default function SemanticSearchScreen() {
               return (
                 <Pressable
                   key={chipText}
-                  style={[
+                  style={({ pressed }) => [
                     styles.suggestionChip,
                     isSelected && styles.suggestionChipActive,
+                    pressed && styles.pressed,
                   ]}
-                  onPress={() => handleSelectSuggestion(chipText)}>
+                  onPress={() => handleSelectSuggestion(chipText)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={`Tìm kiếm gợi ý: ${chipText}`}>
                   <Ionicons
-                    name="sparkles-outline"
-                    size={12}
-                    color={isSelected ? Palette.textInverse : Palette.indigo600}
+                    name="sparkles"
+                    size={11}
+                    color={isSelected ? Palette.surface : Palette.indigo600}
                   />
                   <Text
                     style={[
@@ -156,116 +194,137 @@ export default function SemanticSearchScreen() {
             })}
           </ScrollView>
         </View>
-
-        {/* Bộ lọc Hybrid Metadata (Chuyến đi & Ngày chụp - UC-13) */}
-        <View style={styles.filtersRow}>
-          <Pressable
-            style={[
-              styles.filterPill,
-              tripIdFilter === null && styles.filterPillTealActive,
-            ]}
-            onPress={() => {
-              setTripIdFilter(null);
-              executeSearch(query, null, dateFilter);
-            }}>
-            <Ionicons
-              name="globe-outline"
-              size={13}
-              color={tripIdFilter === null ? Palette.textInverse : Palette.textSecondary}
-            />
-            <Text
-              style={[
-                styles.filterPillText,
-                tripIdFilter === null && styles.filterPillTextActive,
-              ]}>
-              Mọi chuyến đi
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.filterPill,
-              tripIdFilter === 'trip_123' && styles.filterPillTealActive,
-            ]}
-            onPress={() => {
-              const nextTrip = tripIdFilter === 'trip_123' ? null : 'trip_123';
-              setTripIdFilter(nextTrip);
-              executeSearch(query, nextTrip, dateFilter);
-            }}>
-            <Ionicons
-              name="sunny-outline"
-              size={13}
-              color={tripIdFilter === 'trip_123' ? Palette.textInverse : Palette.textSecondary}
-            />
-            <Text
-              style={[
-                styles.filterPillText,
-                tripIdFilter === 'trip_123' && styles.filterPillTextActive,
-              ]}>
-              Vũng Tàu
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.filterPill,
-              tripIdFilter === 'trip_124' && styles.filterPillTealActive,
-            ]}
-            onPress={() => {
-              const nextTrip = tripIdFilter === 'trip_124' ? null : 'trip_124';
-              setTripIdFilter(nextTrip);
-              executeSearch(query, nextTrip, dateFilter);
-            }}>
-            <Ionicons
-              name="leaf-outline"
-              size={13}
-              color={tripIdFilter === 'trip_124' ? Palette.textInverse : Palette.textSecondary}
-            />
-            <Text
-              style={[
-                styles.filterPillText,
-                tripIdFilter === 'trip_124' && styles.filterPillTextActive,
-              ]}>
-              Đà Lạt
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.filterPill,
-              dateFilter === '2026-10-10' && styles.filterPillTealActive,
-            ]}
-            onPress={() => {
-              const nextDate = dateFilter === '2026-10-10' ? null : '2026-10-10';
-              setDateFilter(nextDate);
-              executeSearch(query, tripIdFilter, nextDate);
-            }}>
-            <Feather
-              name="calendar"
-              size={12}
-              color={dateFilter === '2026-10-10' ? Palette.textInverse : Palette.textSecondary}
-            />
-            <Text
-              style={[
-                styles.filterPillText,
-                dateFilter === '2026-10-10' && styles.filterPillTextActive,
-              ]}>
-              10/10/2026
-            </Text>
-          </Pressable>
-        </View>
       </View>
 
-      {/* Dòng tóm tắt số lượng kết quả */}
-      <View style={styles.resultsSummaryRow}>
-        <Text style={styles.resultsSummaryText}>
-          Tìm thấy <Text style={styles.resultsCountHighlight}>{results.length} bức ảnh</Text>{' '}
-          tương đồng vector CLIP
+      {/* Metadata Filter Pills (Trip & Date — UC-13) */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.metadataFiltersRow}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.filterPill,
+            tripIdFilter === null && styles.filterPillActive,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => {
+            setTripIdFilter(null);
+            executeSearch(query, null, dateFilter);
+          }}
+          accessibilityRole="button"
+          accessibilityState={{ selected: tripIdFilter === null }}
+          accessibilityLabel="Lọc tất cả chuyến đi">
+          <Ionicons
+            name="globe-outline"
+            size={IconSize.xs}
+            color={tripIdFilter === null ? Palette.surface : Palette.textSecondary}
+          />
+          <Text
+            style={[
+              styles.filterPillText,
+              tripIdFilter === null && styles.filterPillTextActive,
+            ]}>
+            Mọi hành trình
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.filterPill,
+            tripIdFilter === 'trip_123' && styles.filterPillActive,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => {
+            const nextTrip = tripIdFilter === 'trip_123' ? null : 'trip_123';
+            setTripIdFilter(nextTrip);
+            executeSearch(query, nextTrip, dateFilter);
+          }}
+          accessibilityRole="button"
+          accessibilityState={{ selected: tripIdFilter === 'trip_123' }}
+          accessibilityLabel="Lọc chuyến đi Vũng Tàu">
+          <Ionicons
+            name="sunny-outline"
+            size={IconSize.xs}
+            color={
+              tripIdFilter === 'trip_123' ? Palette.surface : Palette.textSecondary
+            }
+          />
+          <Text
+            style={[
+              styles.filterPillText,
+              tripIdFilter === 'trip_123' && styles.filterPillTextActive,
+            ]}>
+            Vũng Tàu
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.filterPill,
+            tripIdFilter === 'trip_124' && styles.filterPillActive,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => {
+            const nextTrip = tripIdFilter === 'trip_124' ? null : 'trip_124';
+            setTripIdFilter(nextTrip);
+            executeSearch(query, nextTrip, dateFilter);
+          }}
+          accessibilityRole="button"
+          accessibilityState={{ selected: tripIdFilter === 'trip_124' }}
+          accessibilityLabel="Lọc chuyến đi Đà Lạt">
+          <Ionicons
+            name="leaf-outline"
+            size={IconSize.xs}
+            color={
+              tripIdFilter === 'trip_124' ? Palette.surface : Palette.textSecondary
+            }
+          />
+          <Text
+            style={[
+              styles.filterPillText,
+              tripIdFilter === 'trip_124' && styles.filterPillTextActive,
+            ]}>
+            Đà Lạt
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.filterPill,
+            dateFilter === '2026-10-10' && styles.filterPillActive,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => {
+            const nextDate = dateFilter === '2026-10-10' ? null : '2026-10-10';
+            setDateFilter(nextDate);
+            executeSearch(query, tripIdFilter, nextDate);
+          }}
+          accessibilityRole="button"
+          accessibilityState={{ selected: dateFilter === '2026-10-10' }}
+          accessibilityLabel="Lọc ngày 10 tháng 10 năm 2026">
+          <Feather
+            name="calendar"
+            size={IconSize.xs}
+            color={
+              dateFilter === '2026-10-10' ? Palette.surface : Palette.textSecondary
+            }
+          />
+          <Text
+            style={[
+              styles.filterPillText,
+              dateFilter === '2026-10-10' && styles.filterPillTextActive,
+            ]}>
+            10/10/2026
+          </Text>
+        </Pressable>
+      </ScrollView>
+
+      {/* Results Summary Bar */}
+      <View style={styles.resultsSummaryBar}>
+        <Text style={styles.resultsHeadingText}>
+          {results.length} khoảnh khắc tương đồng
         </Text>
-        <View style={styles.vectorStatusTag}>
-          <Ionicons name="flash" size={11} color={Palette.emeraldText} />
-          <Text style={styles.vectorStatusTagText}>Cosine Similarity</Text>
-        </View>
+        <Text style={styles.resultsSubHint}>Chạm vào ảnh để mở bản đồ</Text>
       </View>
     </View>
   );
@@ -273,74 +332,37 @@ export default function SemanticSearchScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       {loading ? (
-        <View style={styles.loadingContainer}>
-          {renderHeader()}
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color={Palette.indigo600} />
-            <Text style={styles.loadingText}>
-              Đang so khớp vector CLIP & lọc không gian PostGIS...
-            </Text>
-          </View>
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={Palette.indigo600} />
+          <Text style={styles.loadingStateText}>
+            Đang đối sánh ngữ nghĩa hình ảnh...
+          </Text>
         </View>
       ) : (
         <FlatList
           data={results}
-          keyExtractor={(item) => `${item.trip_id}_${item.photo_id}`}
+          keyExtractor={(item) => item.photo_id}
           numColumns={2}
           ListHeaderComponent={renderHeader}
-          columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={styles.gridContent}
+          columnWrapperStyle={styles.gridColumnWrapper}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const matchPercent = Math.round(item.similarity_score * 100);
-            return (
-              <Pressable
-                style={styles.bentoResultCard}
-                onPress={() =>
-                  router.push({ pathname: '/trips/[tripId]', params: { tripId: item.trip_id } })
-                }>
-                {/* Ảnh kết quả + Huy hiệu độ tương đồng CLIP nổi góc trên bên phải */}
-                <View style={styles.resultImageWrapper}>
-                  <Image
-                    source={{ uri: item.thumbnail_url }}
-                    style={styles.resultImage}
-                    resizeMode="cover"
-                  />
-
-                  <View style={styles.similarityFloatingBadge}>
-                    <Text style={styles.similarityBadgeText}>
-                      ✨ {matchPercent}% khớp
-                    </Text>
-                  </View>
-
-                  <View style={styles.dayOverlayPill}>
-                    <Text style={styles.dayOverlayPillText}>Ngày {item.day_number}</Text>
-                  </View>
-                </View>
-
-                {/* Chân thẻ: Tên Điểm dừng (kèm icon định vị), Ngày chụp & Giờ chụp */}
-                <View style={styles.resultCardFooter}>
-                  <View style={styles.stopNameRow}>
-                    <Ionicons name="location" size={14} color={Palette.coral500} />
-                    <Text style={styles.stopNameText} numberOfLines={1}>
-                      {item.stop.name}
-                    </Text>
-                  </View>
-
-                  <View style={styles.metaBottomRow}>
-                    <View style={styles.metaTimeChip}>
-                      <Feather name="clock" size={11} color={Palette.textSubtle} />
-                      <Text style={styles.metaTimeText}>
-                        {formatTimeHm(item.taken_at)} • {item.taken_at.slice(5, 10)}
-                      </Text>
-                    </View>
-
-                    <Feather name="arrow-up-right" size={14} color={Palette.teal600} />
-                  </View>
-                </View>
-              </Pressable>
-            );
-          }}
+          ListEmptyComponent={
+            <View style={styles.emptyCard}>
+              <Ionicons name="images-outline" size={38} color={Palette.textMuted} />
+              <Text style={styles.emptyTitle}>Chưa tìm thấy bức ảnh phù hợp</Text>
+              <Text style={styles.emptySubtitle}>
+                Hãy thử chọn một gợi ý tiếng Việt ở trên hoặc bỏ bộ lọc chuyến đi.
+              </Text>
+            </View>
+          }
+          renderItem={({ item, index }) => (
+            <SemanticPhotoCard
+              item={item}
+              index={index}
+              onPress={handleOpenResultTrip}
+            />
+          )}
         />
       )}
     </SafeAreaView>
@@ -352,124 +374,162 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.bgPrimary,
   },
-  loadingContainer: {
+  loadingState: {
     flex: 1,
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  loadingStateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.textSubtle,
+  },
+  listContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.sm,
+    paddingBottom: 64,
+    gap: Spacing.md,
+  },
+  gridColumnWrapper: {
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   headerBlock: {
-    gap: 14,
-    marginBottom: 12,
+    gap: Spacing.lg,
+    marginBottom: Spacing.xs,
   },
-  topBar: {
+  topNavRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 6,
   },
-  topBarLeft: {
-    gap: 3,
-  },
-  pillarBadge: {
-    flexDirection: 'row',
+  backCircleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.border,
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'center',
+    ...Shadows.subtle,
   },
-  pillarBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Palette.indigo600,
-    letterSpacing: 0.5,
-  },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-    letterSpacing: -0.4,
-  },
-  homePillBtn: {
+  topCenterKicker: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadows.subtle,
-  },
-  homePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.textPrimary,
-  },
-  spotlightCard: {
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.cardLg,
-    padding: 16,
+    backgroundColor: Palette.indigo50,
     borderWidth: 1,
     borderColor: Palette.indigo100,
-    gap: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+  },
+  topCenterKickerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Palette.indigo700,
+    letterSpacing: 0.8,
+  },
+  uploadShortcutBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.subtle,
+  },
+  lightHeroCard: {
+    backgroundColor: Palette.indigo50,
+    borderRadius: Radius.hero,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: Palette.indigo100,
     ...Shadows.card,
   },
-  spotlightInputRow: {
+  heroTitleGroup: {
+    gap: 6,
+  },
+  heroEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.indigo600,
+    letterSpacing: 1,
+  },
+  heroSerifTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 31,
+    color: Palette.textPrimary,
+    letterSpacing: -0.3,
+  },
+  spotlightInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: Palette.bgPrimary,
+    gap: Spacing.sm,
+    backgroundColor: Palette.surface,
     borderRadius: Radius.pill,
     paddingLeft: 8,
     paddingRight: 6,
     paddingVertical: 6,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Palette.indigo100,
+    ...Shadows.subtle,
   },
-  sparkleIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  sparkleBadgeCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Palette.indigo50,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchInput: {
+  queryTextInput: {
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: Palette.textPrimary,
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
-  clearInputBtn: {
+  clearIconBtn: {
     padding: 4,
   },
-  searchTriggerBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  submitSearchCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Palette.indigo600,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  suggestionsSection: {
-    gap: 7,
+  suggestionsGroup: {
+    gap: 8,
   },
-  sectionMiniLabel: {
+  suggestionsLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: Palette.textSecondary,
   },
   suggestionsScroll: {
     gap: 8,
+    paddingRight: 4,
   },
   suggestionChip: {
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: Palette.indigo50,
+    backgroundColor: Palette.surface,
     borderWidth: 1,
     borderColor: Palette.indigo100,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: Radius.pill,
   },
   suggestionChipActive: {
@@ -479,166 +539,76 @@ const styles = StyleSheet.create({
   suggestionChipText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Palette.indigo600,
+    color: Palette.indigo700,
   },
   suggestionChipTextActive: {
-    color: Palette.textInverse,
+    color: Palette.surface,
   },
-  filtersRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  metadataFiltersRow: {
     gap: 8,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: Palette.bgSecondary,
+    paddingVertical: 2,
   },
   filterPill: {
+    minHeight: 36,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: Palette.bgPrimary,
+    gap: 6,
+    backgroundColor: Palette.surface,
     borderWidth: 1,
     borderColor: Palette.border,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
     borderRadius: Radius.pill,
   },
-  filterPillTealActive: {
-    backgroundColor: Palette.teal600,
-    borderColor: Palette.teal600,
+  filterPillActive: {
+    backgroundColor: Palette.teal700,
+    borderColor: Palette.teal700,
   },
   filterPillText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: Palette.textSecondary,
   },
   filterPillTextActive: {
-    color: Palette.textInverse,
+    color: Palette.surface,
   },
-  resultsSummaryRow: {
+  resultsSummaryBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
   },
-  resultsSummaryText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Palette.textSecondary,
-  },
-  resultsCountHighlight: {
-    fontWeight: '800',
-    color: Palette.indigo600,
-  },
-  vectorStatusTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Palette.emeraldBg,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-  },
-  vectorStatusTagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Palette.emeraldText,
-  },
-  centerBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-  },
-  loadingText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Palette.textSecondary,
-  },
-  gridContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-  gridRow: {
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  bentoResultCard: {
-    width: '48.2%',
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.card,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadows.card,
-  },
-  resultImageWrapper: {
-    width: '100%',
-    height: 158,
-    position: 'relative',
-    backgroundColor: '#CBD5E1',
-  },
-  resultImage: {
-    width: '100%',
-    height: '100%',
-  },
-  similarityFloatingBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: Palette.darkOverlayStrong,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-  },
-  similarityBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#EEF2FF',
-  },
-  dayOverlayPill: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    backgroundColor: 'rgba(13, 148, 136, 0.88)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-  },
-  dayOverlayPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Palette.textInverse,
-  },
-  resultCardFooter: {
-    padding: 11,
-    gap: 6,
-  },
-  stopNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  stopNameText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '800',
+  resultsHeadingText: {
+    fontFamily: SERIF_FONT,
+    fontSize: 20,
+    fontWeight: '700',
     color: Palette.textPrimary,
   },
-  metaBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  metaTimeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaTimeText: {
+  resultsSubHint: {
     fontSize: 11,
     fontWeight: '600',
+    color: Palette.textMuted,
+  },
+  emptyCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.card,
+    padding: Spacing.xxl,
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Palette.border,
+  },
+  emptyTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+  },
+  emptySubtitle: {
+    fontSize: 12,
     color: Palette.textSecondary,
+    textAlign: 'center',
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

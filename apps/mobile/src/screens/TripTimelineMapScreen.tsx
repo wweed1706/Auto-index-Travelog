@@ -1,8 +1,9 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -16,19 +17,28 @@ import {
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Palette, Radius, Shadows } from '@/constants/designSystem';
+import {
+  HitlActionPillBar,
+  NumberedMapMarker,
+  StopWithDayMeta,
+  TimelineStopCard,
+} from '@/components/ui';
 import {
   getTripTimeline,
   mutateTripStops,
   resetMockTimeline,
 } from '@/services/mockApi';
+import {
+  IconSize,
+  MONO_FONT,
+  Palette,
+  Radius,
+  SERIF_FONT,
+  Shadows,
+  Spacing,
+  TouchTarget,
+} from '@/theme';
 import { Coordinates, PhotoItem, TripStop, TripTimeline } from '@/types/trip';
-
-interface StopWithDay extends TripStop {
-  day_number: number;
-  date: string;
-  global_index: number;
-}
 
 const DEFAULT_REGION: Region = {
   latitude: 10.33582,
@@ -51,6 +61,13 @@ function formatTimeHm(isoStr: string): string {
   return timePart ? timePart.slice(0, 5) : '--:--';
 }
 
+const RENAME_SUGGESTIONS: string[] = [
+  'Bãi Sau Vũng Tàu • Bình Minh',
+  'Đỉnh Tượng Chúa Kitô Vua',
+  'Mũi Nghinh Phong Ngắm Hoàng Hôn',
+  'Ngọn Hải Đăng Cổ Vũng Tàu',
+];
+
 export default function TripTimelineMapScreen() {
   const params = useLocalSearchParams<{ tripId?: string }>();
   const tripId = params.tripId ?? 'trip_123';
@@ -64,12 +81,12 @@ export default function TripTimelineMapScreen() {
   const [editCount, setEditCount] = useState<number>(0);
   const [lastActionBanner, setLastActionBanner] = useState<string | null>(null);
 
-  // State cho Modal Đổi tên điểm dừng (RENAME - UC-11)
+  // Modal State: RENAME (UC-11)
   const [renameModalVisible, setRenameModalVisible] = useState<boolean>(false);
   const [renameTargetStop, setRenameTargetStop] = useState<TripStop | null>(null);
   const [renameInputValue, setRenameInputValue] = useState<string>('');
 
-  // State cho Modal Chuyển ảnh lẻ giữa các điểm dừng (MOVE_PHOTO - UC-11)
+  // Modal State: MOVE_PHOTO (UC-11)
   const [movePhotoModalVisible, setMovePhotoModalVisible] = useState<boolean>(false);
   const [moveSourceStop, setMoveSourceStop] = useState<TripStop | null>(null);
   const [selectedPhotoToMove, setSelectedPhotoToMove] = useState<PhotoItem | null>(null);
@@ -98,10 +115,9 @@ export default function TripTimelineMapScreen() {
     };
   }, [tripId]);
 
-  // Danh sách điểm dừng đang hiển thị theo bộ lọc Ngày ('ALL' hoặc Ngày cụ thể)
-  const displayedStops: StopWithDay[] = useMemo(() => {
+  const displayedStops: StopWithDayMeta[] = useMemo(() => {
     if (!timeline) return [];
-    const list: StopWithDay[] = [];
+    const list: StopWithDayMeta[] = [];
     let counter = 1;
     for (const day of timeline.days) {
       if (selectedDayNum === 'ALL' || day.day_number === selectedDayNum) {
@@ -119,7 +135,6 @@ export default function TripTimelineMapScreen() {
     return list;
   }, [timeline, selectedDayNum]);
 
-  // Tọa độ các điểm dừng hợp lệ để vẽ Polyline và Marker
   const routeCoordinates: Coordinates[] = useMemo(() => {
     return displayedStops
       .map((s) => s.centroid)
@@ -137,14 +152,11 @@ export default function TripTimelineMapScreen() {
     };
   }, [routeCoordinates]);
 
-  const selectedStop: StopWithDay | undefined = useMemo(() => {
-    return (
-      displayedStops.find((s) => s.stop_id === selectedStopId) ?? displayedStops[0]
-    );
+  const selectedStop: StopWithDayMeta | undefined = useMemo(() => {
+    return displayedStops.find((s) => s.stop_id === selectedStopId) ?? displayedStops[0];
   }, [displayedStops, selectedStopId]);
 
-  // Bay bản đồ tới centroid khi chọn điểm dừng dưới Timeline
-  const handleFocusStopOnMap = (stop: TripStop) => {
+  const handleFocusStopOnMap = useCallback((stop: TripStop) => {
     setSelectedStopId(stop.stop_id);
     if (stop.centroid && mapRef.current) {
       mapRef.current.animateToRegion(
@@ -157,10 +169,9 @@ export default function TripTimelineMapScreen() {
         650
       );
     }
-  };
+  }, []);
 
-  // Thu phóng bản đồ bao trọn toàn bộ các điểm dừng trong tuyến đường
-  const handleFitAllMarkers = () => {
+  const handleFitAllMarkers = useCallback(() => {
     if (!mapRef.current || routeCoordinates.length === 0) return;
     if (routeCoordinates.length === 1) {
       mapRef.current.animateToRegion(
@@ -175,74 +186,80 @@ export default function TripTimelineMapScreen() {
       return;
     }
     mapRef.current.fitToCoordinates(routeCoordinates, {
-      edgePadding: { top: 76, right: 56, bottom: 76, left: 56 },
+      edgePadding: { top: 80, right: 56, bottom: 80, left: 56 },
       animated: true,
     });
-  };
+  }, [routeCoordinates]);
 
-  // --- CÁC THAO TÁC HUMAN-IN-THE-LOOP (UC-10 & UC-11) ---
+  // --- HUMAN-IN-THE-LOOP HANDLERS (UC-10 & UC-11) ---
 
-  // 1. MERGE: Gộp 2 điểm dừng liên tiếp trong cùng ngày
-  const handleMergeStops = async (primaryStop?: StopWithDay) => {
-    if (!timeline) return;
-    const targetDayNum =
-      primaryStop?.day_number ?? (selectedDayNum === 'ALL' ? 1 : selectedDayNum);
-    const dayObj = timeline.days.find((d) => d.day_number === targetDayNum);
-    if (!dayObj || dayObj.stops.length < 2) {
-      setLastActionBanner('Cần ít nhất 2 điểm dừng trong ngày để thực hiện Gộp (MERGE).');
-      return;
-    }
+  const handleMergeStops = useCallback(
+    async (primaryStop?: StopWithDayMeta) => {
+      if (!timeline) return;
+      const targetDayNum =
+        primaryStop?.day_number ?? (selectedDayNum === 'ALL' ? 1 : selectedDayNum);
+      const dayObj = timeline.days.find((d) => d.day_number === targetDayNum);
+      if (!dayObj || dayObj.stops.length < 2) {
+        setLastActionBanner('Cần ít nhất 2 điểm dừng trong ngày để gộp.');
+        return;
+      }
 
-    const idx = primaryStop
-      ? dayObj.stops.findIndex((s) => s.stop_id === primaryStop.stop_id)
-      : 0;
-    const firstIdx = idx >= 0 && idx < dayObj.stops.length - 1 ? idx : 0;
-    const first = dayObj.stops[firstIdx];
-    const second = dayObj.stops[firstIdx + 1];
+      const idx = primaryStop
+        ? dayObj.stops.findIndex((s) => s.stop_id === primaryStop.stop_id)
+        : 0;
+      const firstIdx = idx >= 0 && idx < dayObj.stops.length - 1 ? idx : 0;
+      const first = dayObj.stops[firstIdx];
+      const second = dayObj.stops[firstIdx + 1];
 
-    const updated = await mutateTripStops(tripId, {
-      action: 'MERGE',
-      source_stop_ids: [first.stop_id, second.stop_id],
-      new_name: `${first.name} & ${second.name}`,
-    });
-    setTimeline(updated);
-    setSelectedStopId(first.stop_id);
-    setEditCount((c) => c + 1);
-    setLastActionBanner(`Đã gộp "${first.name}" và "${second.name}" thành 1 điểm dừng.`);
-  };
+      const updated = await mutateTripStops(tripId, {
+        action: 'MERGE',
+        source_stop_ids: [first.stop_id, second.stop_id],
+        new_name: `${first.name} & ${second.name}`,
+      });
+      setTimeline(updated);
+      setSelectedStopId(first.stop_id);
+      setEditCount((c) => c + 1);
+      setLastActionBanner(`Đã gộp "${first.name}" và "${second.name}".`);
+    },
+    [selectedDayNum, timeline, tripId]
+  );
 
-  // 2. SPLIT: Tách điểm dừng có >= 2 bức ảnh thành 2 điểm dừng độc lập
-  const handleSplitStop = async (targetStop?: TripStop) => {
-    const candidate =
-      targetStop && targetStop.photos.length >= 2
-        ? targetStop
-        : displayedStops.find((s) => s.photos.length >= 2);
+  const handleSplitStop = useCallback(
+    async (targetStop?: TripStop) => {
+      const candidate =
+        targetStop && targetStop.photos.length >= 2
+          ? targetStop
+          : displayedStops.find((s) => s.photos.length >= 2);
 
-    if (!candidate || candidate.photos.length < 2) {
-      setLastActionBanner('Chỉ có thể Tách (SPLIT) điểm dừng có từ 2 bức ảnh trở lên.');
-      return;
-    }
+      if (!candidate || candidate.photos.length < 2) {
+        setLastActionBanner('Chọn điểm dừng có từ 2 bức ảnh trở lên để tách.');
+        return;
+      }
 
-    const updated = await mutateTripStops(tripId, {
-      action: 'SPLIT',
-      source_stop_ids: [candidate.stop_id],
-      new_name: `${candidate.name} (Nhánh tách)`,
-    });
-    setTimeline(updated);
-    setEditCount((c) => c + 1);
-    setLastActionBanner(
-      `Đã tách "${candidate.name}" (${candidate.photos.length} ảnh) thành 2 điểm dừng.`
-    );
-  };
+      const updated = await mutateTripStops(tripId, {
+        action: 'SPLIT',
+        source_stop_ids: [candidate.stop_id],
+        new_name: `${candidate.name} (Điểm tách)`,
+      });
+      setTimeline(updated);
+      setEditCount((c) => c + 1);
+      setLastActionBanner(
+        `Đã tách "${candidate.name}" (${candidate.photos.length} ảnh) thành 2 điểm dừng.`
+      );
+    },
+    [displayedStops, tripId]
+  );
 
-  // 3. RENAME: Mở hộp thoại đổi tên sự kiện/điểm dừng
-  const openRenameModal = (stop?: TripStop) => {
-    const target = stop ?? selectedStop;
-    if (!target) return;
-    setRenameTargetStop(target);
-    setRenameInputValue(target.name);
-    setRenameModalVisible(true);
-  };
+  const openRenameModal = useCallback(
+    (stop?: TripStop) => {
+      const target = stop ?? selectedStop;
+      if (!target) return;
+      setRenameTargetStop(target);
+      setRenameInputValue(target.name);
+      setRenameModalVisible(true);
+    },
+    [selectedStop]
+  );
 
   const handleConfirmRename = async () => {
     if (!renameTargetStop || !renameInputValue.trim()) return;
@@ -254,53 +271,57 @@ export default function TripTimelineMapScreen() {
     });
     setTimeline(updated);
     setEditCount((c) => c + 1);
-    setLastActionBanner(`Đã đổi tên điểm dừng thành "${newName}".`);
+    setLastActionBanner(`Đã đổi tên thành "${newName}".`);
     setRenameModalVisible(false);
   };
 
-  // 4. REORDER: Đổi thứ tự điểm dừng trong ngày
-  const handleReorderStops = async (stopToMove?: StopWithDay) => {
-    if (!timeline) return;
-    const targetDayNum =
-      stopToMove?.day_number ?? (selectedDayNum === 'ALL' ? 1 : selectedDayNum);
-    const dayObj = timeline.days.find((d) => d.day_number === targetDayNum);
-    if (!dayObj || dayObj.stops.length < 2) {
-      setLastActionBanner('Cần ít nhất 2 điểm dừng trong ngày để Đổi thứ tự (REORDER).');
-      return;
-    }
+  const handleReorderStops = useCallback(
+    async (stopToMove?: StopWithDayMeta) => {
+      if (!timeline) return;
+      const targetDayNum =
+        stopToMove?.day_number ?? (selectedDayNum === 'ALL' ? 1 : selectedDayNum);
+      const dayObj = timeline.days.find((d) => d.day_number === targetDayNum);
+      if (!dayObj || dayObj.stops.length < 2) {
+        setLastActionBanner('Cần ít nhất 2 điểm dừng trong ngày để đổi thứ tự.');
+        return;
+      }
 
-    const currentIds = dayObj.stops.map((s) => s.stop_id);
-    let nextOrderedIds: string[];
+      const currentIds = dayObj.stops.map((s) => s.stop_id);
+      let nextOrderedIds: string[];
 
-    if (stopToMove) {
-      const idx = currentIds.indexOf(stopToMove.stop_id);
-      const swapIdx = idx < currentIds.length - 1 ? idx + 1 : idx - 1;
-      nextOrderedIds = [...currentIds];
-      const temp = nextOrderedIds[idx];
-      nextOrderedIds[idx] = nextOrderedIds[swapIdx];
-      nextOrderedIds[swapIdx] = temp;
-    } else {
-      nextOrderedIds = [...currentIds].reverse();
-    }
+      if (stopToMove) {
+        const idx = currentIds.indexOf(stopToMove.stop_id);
+        const swapIdx = idx < currentIds.length - 1 ? idx + 1 : idx - 1;
+        nextOrderedIds = [...currentIds];
+        const temp = nextOrderedIds[idx];
+        nextOrderedIds[idx] = nextOrderedIds[swapIdx];
+        nextOrderedIds[swapIdx] = temp;
+      } else {
+        nextOrderedIds = [...currentIds].reverse();
+      }
 
-    const updated = await mutateTripStops(tripId, {
-      action: 'REORDER',
-      source_stop_ids: nextOrderedIds,
-      ordered_stop_ids: nextOrderedIds,
-    });
-    setTimeline(updated);
-    setEditCount((c) => c + 1);
-    setLastActionBanner(`Đã cập nhật lại thứ tự điểm dừng trong Ngày ${targetDayNum}.`);
-  };
+      const updated = await mutateTripStops(tripId, {
+        action: 'REORDER',
+        source_stop_ids: nextOrderedIds,
+        ordered_stop_ids: nextOrderedIds,
+      });
+      setTimeline(updated);
+      setEditCount((c) => c + 1);
+      setLastActionBanner(`Đã cập nhật thứ tự điểm dừng Ngày ${targetDayNum}.`);
+    },
+    [selectedDayNum, timeline, tripId]
+  );
 
-  // 5. MOVE_PHOTO: Chuyển ảnh lẻ giữa các điểm dừng (UC-11)
-  const openMovePhotoModal = (stop?: TripStop, preselectedPhoto?: PhotoItem) => {
-    const source = stop ?? selectedStop;
-    if (!source || source.photos.length === 0) return;
-    setMoveSourceStop(source);
-    setSelectedPhotoToMove(preselectedPhoto ?? source.photos[0]);
-    setMovePhotoModalVisible(true);
-  };
+  const openMovePhotoModal = useCallback(
+    (stop?: TripStop, preselectedPhoto?: PhotoItem) => {
+      const source = stop ?? selectedStop;
+      if (!source || source.photos.length === 0) return;
+      setMoveSourceStop(source);
+      setSelectedPhotoToMove(preselectedPhoto ?? source.photos[0]);
+      setMovePhotoModalVisible(true);
+    },
+    [selectedStop]
+  );
 
   const handleConfirmMovePhoto = async (targetStop: TripStop) => {
     if (!moveSourceStop || !selectedPhotoToMove) return;
@@ -312,42 +333,39 @@ export default function TripTimelineMapScreen() {
     });
     setTimeline(updated);
     setEditCount((c) => c + 1);
-    setLastActionBanner(
-      `Đã chuyển ảnh #${selectedPhotoToMove.photo_id} sang "${targetStop.name}".`
-    );
+    setLastActionBanner(`Đã chuyển ảnh sang "${targetStop.name}".`);
     setMovePhotoModalVisible(false);
   };
 
-  const handleResetAll = () => {
+  const handleResetAll = useCallback(() => {
     const restored = resetMockTimeline(tripId);
     setTimeline(restored);
     setEditCount(0);
     setSelectedStopId(restored.days[0]?.stops[0]?.stop_id ?? null);
-    setLastActionBanner('Đã khôi phục dữ liệu gom cụm gốc từ Auto-Indexing Engine.');
-  };
+    setLastActionBanner('Đã khôi phục dữ liệu gom cụm gốc.');
+  }, [tripId]);
 
   if (loading || !timeline) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={Palette.teal600} />
-          <Text style={styles.loadingText}>
-            Đang dựng Bản đồ Hành trình & Dòng thời gian...
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={Palette.teal700} />
+          <Text style={styles.loadingStateText}>
+            Đang mở bản đồ & dòng thời gian hành trình...
           </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Các điểm dừng đích có thể nhận ảnh khi thực hiện MOVE_PHOTO
   const candidateTargetStopsForPhoto = displayedStops.filter(
     (s) => s.stop_id !== moveSourceStop?.stop_id
   );
 
   return (
     <View style={styles.rootContainer}>
-      {/* PHẦN TRÊN (TOP 42% MÀN HÌNH): BẢN ĐỒ TƯƠNG TÁC + CUSTOM NUMBERED MARKERS */}
-      <View style={styles.mapSection}>
+      {/* TOP HALF (41%): INTERACTIVE MAP + CUSTOM NUMBERED MARKERS + POLYLINE */}
+      <View style={styles.mapContainer}>
         {Platform.OS !== 'web' ? (
           <MapView
             ref={mapRef}
@@ -373,64 +391,52 @@ export default function TripTimelineMapScreen() {
                   title={`${stop.global_index}. ${stop.name}`}
                   description={`${formatTimeHm(stop.start_time)} - ${formatTimeHm(stop.end_time)}`}
                   onPress={() => handleFocusStopOnMap(stop)}>
-                  <View
-                    style={[
-                      styles.customMarkerBubble,
-                      isSelected
-                        ? styles.customMarkerBubbleActive
-                        : styles.customMarkerBubbleDefault,
-                    ]}>
-                    <Text style={styles.customMarkerNumber}>{stop.global_index}</Text>
-                  </View>
+                  <NumberedMapMarker index={stop.global_index} selected={isSelected} />
                 </Marker>
               );
             })}
           </MapView>
         ) : (
-          /* Fallback trực quan trên trình duyệt Web khi chạy expo start --web */
-          <View style={styles.webMapFallback}>
-            <View style={styles.webMapHeader}>
-              <Ionicons name="map" size={18} color={Palette.teal500} />
-              <Text style={styles.webMapTitle}>
+          <View style={styles.webMapCanvas}>
+            <View style={styles.webMapTitleRow}>
+              <Ionicons name="compass-outline" size={IconSize.md} color={Palette.teal700} />
+              <Text style={styles.webMapTitleText}>
                 Bản đồ Tuyến Hành trình • {timeline.title}
               </Text>
             </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.webMarkersRow}>
+              contentContainerStyle={styles.webNodesRow}>
               {displayedStops.map((stop, idx) => {
                 const isSelected = stop.stop_id === selectedStop?.stop_id;
                 return (
-                  <View key={stop.stop_id} style={styles.webMarkerChain}>
+                  <View key={stop.stop_id} style={styles.webNodeChainItem}>
                     <Pressable
-                      style={[
-                        styles.webMarkerCard,
-                        isSelected && styles.webMarkerCardActive,
+                      style={({ pressed }) => [
+                        styles.webNodeCard,
+                        isSelected && styles.webNodeCardActive,
+                        pressed && styles.pressed,
                       ]}
-                      onPress={() => handleFocusStopOnMap(stop)}>
-                      <View
-                        style={[
-                          styles.customMarkerBubble,
-                          isSelected
-                            ? styles.customMarkerBubbleActive
-                            : styles.customMarkerBubbleDefault,
-                        ]}>
-                        <Text style={styles.customMarkerNumber}>{stop.global_index}</Text>
-                      </View>
-                      <View style={styles.webMarkerTextCol}>
-                        <Text style={styles.webMarkerName} numberOfLines={1}>
+                      onPress={() => handleFocusStopOnMap(stop)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Điểm dừng số ${stop.global_index}: ${stop.name}`}>
+                      <NumberedMapMarker
+                        index={stop.global_index}
+                        selected={isSelected}
+                        size="sm"
+                      />
+                      <View style={styles.webNodeMetaCol}>
+                        <Text style={styles.webNodeName} numberOfLines={1}>
                           {stop.name}
                         </Text>
-                        <Text style={styles.webMarkerCoord}>
-                          {stop.centroid
-                            ? `${stop.centroid.latitude.toFixed(4)}, ${stop.centroid.longitude.toFixed(4)}`
-                            : 'GPS: unknown'}
+                        <Text style={styles.webNodeCoord}>
+                          {formatTimeHm(stop.start_time)} • {stop.photos.length} ảnh
                         </Text>
                       </View>
                     </Pressable>
                     {idx < displayedStops.length - 1 && (
-                      <View style={styles.webPolylineConnector} />
+                      <View style={styles.webPolylineSegment} />
                     )}
                   </View>
                 );
@@ -439,96 +445,117 @@ export default function TripTimelineMapScreen() {
           </View>
         )}
 
-        {/* Thanh điều hướng nổi phía trên Bản đồ */}
+        {/* Floating Frosted Light Top Navigation Bar */}
         <SafeAreaView edges={['top']} style={styles.floatingTopBar}>
-          <Pressable style={styles.floatingCircleBtn} onPress={() => router.back()}>
-            <Feather name="arrow-left" size={18} color={Palette.textPrimary} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.floatingBackCircle,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại danh sách chuyến đi">
+            <Feather name="arrow-left" size={IconSize.md} color={Palette.textPrimary} />
           </Pressable>
 
-          <View style={styles.floatingTitlePill}>
-            <Ionicons name="navigate-circle" size={16} color={Palette.teal600} />
-            <Text style={styles.floatingTitleText} numberOfLines={1}>
-              {timeline.title}
+          <View style={styles.floatingActiveStopPill}>
+            <View style={styles.activeCoralDot} />
+            <Text style={styles.floatingActiveStopText} numberOfLines={1}>
+              {selectedStop
+                ? `${selectedStop.global_index}. ${selectedStop.name}`
+                : timeline.title}
             </Text>
           </View>
 
           <Pressable
-            style={styles.floatingAiSearchBtn}
-            onPress={() => router.push('/search')}>
-            <Ionicons name="sparkles" size={14} color={Palette.textInverse} />
-            <Text style={styles.floatingAiSearchText}>CLIP</Text>
+            style={({ pressed }) => [
+              styles.floatingSearchCircle,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => router.push('/search')}
+            accessibilityRole="button"
+            accessibilityLabel="Mở tìm kiếm ảnh AI CLIP">
+            <Ionicons name="sparkles" size={IconSize.sm} color={Palette.indigo600} />
           </Pressable>
         </SafeAreaView>
 
-        {/* Các nút điều khiển nổi góc dưới Bản đồ (Fit All Markers + Usability Edits Counter) */}
-        <View style={styles.floatingBottomMapControls}>
-          <View style={styles.editsCounterBadge}>
-            <Ionicons name="construct" size={13} color={Palette.indigo600} />
-            <Text style={styles.editsCounterText}>
-              Usability Edits: <Text style={styles.editsCounterNum}>{editCount}</Text>
+        {/* Floating Light Bottom Map Controls */}
+        <View style={styles.floatingMapBottomRow}>
+          <View style={styles.mapRouteSummaryPill}>
+            <Ionicons name="git-commit-outline" size={IconSize.sm} color={Palette.teal700} />
+            <Text style={styles.mapRouteSummaryText}>
+              {displayedStops.length} điểm dừng • {editCount} chỉnh sửa
             </Text>
           </View>
 
-          <Pressable style={styles.fitRouteButton} onPress={handleFitAllMarkers}>
-            <Ionicons name="scan-outline" size={15} color={Palette.teal600} />
-            <Text style={styles.fitRouteButtonText}>Thu phóng toàn tuyến</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.fitAllRouteBtn,
+              pressed && styles.pressed,
+            ]}
+            onPress={handleFitAllMarkers}
+            accessibilityRole="button"
+            accessibilityLabel="Thu phóng toàn tuyến đường trên bản đồ">
+            <Ionicons name="scan-outline" size={IconSize.sm} color={Palette.teal700} />
+            <Text style={styles.fitAllRouteBtnText}>Toàn tuyến</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* PHẦN DƯỚI (BOTTOM 58% MÀN HÌNH): FLOATING ROUNDED SHEET (borderTopLeftRadius: 28) */}
-      <View style={styles.floatingSheet}>
-        {/* Thanh nắm ngang (Grabber Pill) */}
-        <View style={styles.grabberWrapper}>
-          <View style={styles.grabberPill} />
+      {/* BOTTOM HALF (59%): WARM EDITORIAL IVORY SHEET (32px) + DAY PILLS + STEPPER */}
+      <View style={styles.floatingSheetContainer}>
+        {/* Grabber Handle */}
+        <View style={styles.grabberRow}>
+          <View style={styles.grabberHandle} />
         </View>
 
-        {/* Tiêu đề Chuyến đi + Nút Tải thêm ảnh */}
+        {/* Editorial Sheet Header + Quick Upload Button */}
         <View style={styles.sheetHeaderRow}>
-          <View style={styles.sheetHeaderLeft}>
-            <Text style={styles.sheetTripTitle} numberOfLines={1}>
+          <View style={styles.sheetTitleCol}>
+            <Text style={styles.sheetEditorialTitle} numberOfLines={1}>
               {timeline.title}
-            </Text>
-            <Text style={styles.sheetTripSub}>
-              {timeline.start_date} → {timeline.end_date} • {displayedStops.length} điểm dừng
             </Text>
           </View>
 
           <Pressable
-            style={styles.sheetUploadPill}
-            onPress={() => router.push({ pathname: '/upload', params: { tripId } })}>
-            <Feather name="plus" size={14} color={Palette.teal600} />
-            <Text style={styles.sheetUploadPillText}>Thêm ảnh</Text>
+            style={({ pressed }) => [
+              styles.sheetUploadBtn,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => router.push({ pathname: '/upload', params: { tripId } })}
+            accessibilityRole="button"
+            accessibilityLabel="Thêm ảnh mới vào chuyến đi">
+            <Feather name="plus" size={13} color={Palette.surface} />
+            <Text style={styles.sheetUploadBtnText}>Thêm ảnh</Text>
           </Pressable>
         </View>
 
-        {/* Thanh chọn Ngày dạng Pill Tabs cuộn ngang */}
-        <View style={styles.daySelectorWrapper}>
+        {/* Horizontal Day Selector Pill Tabs (Light Theme) */}
+        <View style={styles.dayTabsSection}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dayPillsScroll}>
+            contentContainerStyle={styles.dayTabsScroll}>
             <Pressable
-              style={[
-                styles.dayPill,
-                selectedDayNum === 'ALL' && styles.dayPillActive,
+              style={({ pressed }) => [
+                styles.dayTabPill,
+                selectedDayNum === 'ALL' && styles.dayTabPillActive,
+                pressed && styles.pressed,
               ]}
               onPress={() => {
                 setSelectedDayNum('ALL');
                 const first = timeline.days[0]?.stops[0];
                 if (first) handleFocusStopOnMap(first);
-              }}>
-              <Ionicons
-                name="layers-outline"
-                size={14}
-                color={selectedDayNum === 'ALL' ? Palette.textInverse : Palette.textSecondary}
-              />
+              }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: selectedDayNum === 'ALL' }}
+              accessibilityLabel="Xem tất cả các ngày">
               <Text
                 style={[
-                  styles.dayPillText,
-                  selectedDayNum === 'ALL' && styles.dayPillTextActive,
+                  styles.dayTabPillText,
+                  selectedDayNum === 'ALL' && styles.dayTabPillTextActive,
                 ]}>
-                Tất cả ({timeline.days.reduce((a, d) => a + d.stops.length, 0)})
+                Tất cả ({timeline.days.reduce((acc, d) => acc + d.stops.length, 0)})
               </Text>
             </Pressable>
 
@@ -537,20 +564,25 @@ export default function TripTimelineMapScreen() {
               return (
                 <Pressable
                   key={day.day_number}
-                  style={[styles.dayPill, isActive && styles.dayPillActive]}
+                  style={({ pressed }) => [
+                    styles.dayTabPill,
+                    isActive && styles.dayTabPillActive,
+                    pressed && styles.pressed,
+                  ]}
                   onPress={() => {
                     setSelectedDayNum(day.day_number);
                     const first = day.stops[0];
                     if (first) handleFocusStopOnMap(first);
-                  }}>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={14}
-                    color={isActive ? Palette.textInverse : Palette.textSecondary}
-                  />
+                  }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`Ngày ${day.day_number}, ${day.date}`}>
                   <Text
-                    style={[styles.dayPillText, isActive && styles.dayPillTextActive]}>
-                    Ngày {day.day_number} • {formatShortDate(day.date)} ({day.stops.length})
+                    style={[
+                      styles.dayTabPillText,
+                      isActive && styles.dayTabPillTextActive,
+                    ]}>
+                    Ngày {day.day_number} • {formatShortDate(day.date)}
                   </Text>
                 </Pressable>
               );
@@ -558,310 +590,43 @@ export default function TripTimelineMapScreen() {
           </ScrollView>
         </View>
 
-        {/* Thanh công cụ Human-in-the-Loop trực quan (UC-10 & UC-11) */}
-        <View style={styles.hitlToolbarCard}>
-          <View style={styles.hitlToolbarHeader}>
-            <View style={styles.hitlTitleRow}>
-              <Ionicons name="options" size={15} color={Palette.indigo600} />
-              <Text style={styles.hitlToolbarTitle}>
-                Human-in-the-Loop Indexing (UC-10, UC-11)
-              </Text>
-            </View>
-            <Pressable style={styles.resetPillBtn} onPress={handleResetAll}>
-              <Feather name="rotate-ccw" size={12} color={Palette.textSecondary} />
-              <Text style={styles.resetPillText}>Khôi phục</Text>
-            </Pressable>
-          </View>
+        {/* Light Gallery Human-in-the-Loop Action Dock */}
+        <HitlActionPillBar
+          editCount={editCount}
+          lastActionBanner={lastActionBanner}
+          onMerge={() => handleMergeStops(selectedStop)}
+          onSplit={() => handleSplitStop(selectedStop)}
+          onRename={() => openRenameModal(selectedStop)}
+          onReorder={() => handleReorderStops(selectedStop)}
+          onMovePhoto={() => openMovePhotoModal(selectedStop)}
+          onReset={handleResetAll}
+        />
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.hitlActionsScroll}>
-            <Pressable
-              style={styles.hitlActionPill}
-              onPress={() => handleMergeStops(selectedStop)}>
-              <Ionicons name="git-merge-outline" size={14} color={Palette.indigo600} />
-              <Text style={styles.hitlActionPillText}>Gộp (MERGE)</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.hitlActionPill}
-              onPress={() => handleSplitStop(selectedStop)}>
-              <Ionicons name="git-branch-outline" size={14} color={Palette.indigo600} />
-              <Text style={styles.hitlActionPillText}>Tách cụm (SPLIT)</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.hitlActionPill}
-              onPress={() => openRenameModal(selectedStop)}>
-              <Feather name="edit-3" size={13} color={Palette.indigo600} />
-              <Text style={styles.hitlActionPillText}>Đổi tên (RENAME)</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.hitlActionPill}
-              onPress={() => handleReorderStops(selectedStop)}>
-              <Ionicons name="swap-vertical-outline" size={14} color={Palette.indigo600} />
-              <Text style={styles.hitlActionPillText}>Đổi thứ tự (REORDER)</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.hitlActionPill}
-              onPress={() => openMovePhotoModal(selectedStop)}>
-              <Ionicons name="images-outline" size={14} color={Palette.indigo600} />
-              <Text style={styles.hitlActionPillText}>Chuyển ảnh lẻ</Text>
-            </Pressable>
-          </ScrollView>
-
-          {lastActionBanner && (
-            <View style={styles.feedbackBanner}>
-              <Ionicons name="checkmark-circle" size={14} color={Palette.emeraldText} />
-              <Text style={styles.feedbackBannerText} numberOfLines={2}>
-                {lastActionBanner}
-              </Text>
-            </View>
+        {/* Connected Vertical Stepper Virtualized List */}
+        <FlatList
+          data={displayedStops}
+          keyExtractor={(item) => item.stop_id}
+          contentContainerStyle={styles.stepperListContent}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <TimelineStopCard
+              stop={item}
+              selected={item.stop_id === selectedStop?.stop_id}
+              isLast={index === displayedStops.length - 1}
+              showDayTag={selectedDayNum === 'ALL'}
+              canMoveBetweenStops={displayedStops.length >= 2}
+              onSelectStop={handleFocusStopOnMap}
+              onRename={openRenameModal}
+              onMerge={handleMergeStops}
+              onSplit={handleSplitStop}
+              onReorder={handleReorderStops}
+              onMovePhoto={openMovePhotoModal}
+            />
           )}
-        </View>
-
-        {/* Danh sách Điểm dừng dạng Connected Vertical Stepper */}
-        <ScrollView
-          style={styles.timelineScroll}
-          contentContainerStyle={styles.timelineScrollContent}
-          showsVerticalScrollIndicator={false}>
-          {displayedStops.map((stop, index) => {
-            const isSelected = stop.stop_id === selectedStop?.stop_id;
-            const isLast = index === displayedStops.length - 1;
-            const canSplit = stop.photos.length >= 2;
-
-            return (
-              <View key={stop.stop_id} style={styles.stepperRow}>
-                {/* Cột trái: Numbered Node + Đường kẻ dọc nối các điểm dừng */}
-                <View style={styles.stepperLeftColumn}>
-                  <Pressable
-                    style={[
-                      styles.stepperNodeCircle,
-                      isSelected
-                        ? styles.stepperNodeCircleActive
-                        : styles.stepperNodeCircleDefault,
-                    ]}
-                    onPress={() => handleFocusStopOnMap(stop)}>
-                    <Text style={styles.stepperNodeText}>{stop.global_index}</Text>
-                  </Pressable>
-                  {!isLast && <View style={styles.stepperVerticalLine} />}
-                </View>
-
-                {/* Cột phải: Thẻ StopCard */}
-                <Pressable
-                  style={[
-                    styles.stopCard,
-                    isSelected && styles.stopCardActive,
-                  ]}
-                  onPress={() => handleFocusStopOnMap(stop)}>
-                  {/* Hàng tiêu đề StopCard */}
-                  <View style={styles.stopCardTopRow}>
-                    <View style={styles.stopTitleBlock}>
-                      <View style={styles.stopTimePillRow}>
-                        <View style={styles.timeRangeBadge}>
-                          <Feather name="clock" size={11} color={Palette.teal700} />
-                          <Text style={styles.timeRangeText}>
-                            {formatTimeHm(stop.start_time)} - {formatTimeHm(stop.end_time)}
-                          </Text>
-                        </View>
-
-                        {selectedDayNum === 'ALL' && (
-                          <View style={styles.dayTagMini}>
-                            <Text style={styles.dayTagMiniText}>Ngày {stop.day_number}</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <Text style={styles.stopNameText}>{stop.name}</Text>
-                    </View>
-
-                    {/* Huy hiệu trạng thái Xác nhận / Tự động gom cụm */}
-                    <View
-                      style={[
-                        styles.confirmStatusBadge,
-                        stop.is_user_confirmed
-                          ? styles.confirmedBadgeBg
-                          : styles.autoClusteredBadgeBg,
-                      ]}>
-                      <Ionicons
-                        name={
-                          stop.is_user_confirmed
-                            ? 'checkmark-done-circle'
-                            : 'sparkles-outline'
-                        }
-                        size={13}
-                        color={
-                          stop.is_user_confirmed
-                            ? Palette.emeraldText
-                            : Palette.indigo600
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.confirmStatusText,
-                          {
-                            color: stop.is_user_confirmed
-                              ? Palette.emeraldText
-                              : Palette.indigo600,
-                          },
-                        ]}>
-                        {stop.is_user_confirmed ? 'Đã xác nhận' : 'Tự động gom cụm'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Dòng tọa độ Centroid */}
-                  <View style={styles.centroidRow}>
-                    <Ionicons name="location-outline" size={14} color={Palette.coral500} />
-                    <Text style={styles.centroidText}>
-                      Centroid:{' '}
-                      {stop.centroid
-                        ? `${stop.centroid.latitude.toFixed(5)}, ${stop.centroid.longitude.toFixed(5)}`
-                        : 'GPS unknown'}
-                    </Text>
-                    <Text style={styles.photoCountDot}>• {stop.photos.length} ảnh</Text>
-                  </View>
-
-                  {/* Dải cuộn ngang các ảnh Thumbnail trong điểm dừng */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.photosHorizontalList}>
-                    {stop.photos.map((photo) => {
-                      const hasGps =
-                        photo.latitude !== null && photo.longitude !== null;
-                      return (
-                        <View key={photo.photo_id} style={styles.photoThumbCard}>
-                          <Image
-                            source={{ uri: photo.thumbnail_url }}
-                            style={styles.photoThumbImage}
-                            resizeMode="cover"
-                          />
-
-                          {/* Huy hiệu trạng thái EXIF GPS trên góc ảnh */}
-                          <View
-                            style={[
-                              styles.exifGpsBadge,
-                              hasGps ? styles.exifGpsVerified : styles.exifGpsUnknown,
-                            ]}>
-                            <Ionicons
-                              name={hasGps ? 'navigate' : 'warning'}
-                              size={10}
-                              color={hasGps ? Palette.emeraldText : Palette.amberText}
-                            />
-                            <Text
-                              style={[
-                                styles.exifGpsBadgeText,
-                                {
-                                  color: hasGps
-                                    ? Palette.emeraldText
-                                    : Palette.amberText,
-                                },
-                              ]}>
-                              {hasGps ? 'GPS OK' : 'GPS null'}
-                            </Text>
-                          </View>
-
-                          {/* Chân ảnh: Giờ chụp + Nút chuyển ảnh nhanh */}
-                          <View style={styles.photoThumbFooter}>
-                            <Text style={styles.photoThumbTime}>
-                              {formatTimeHm(photo.taken_at)}
-                            </Text>
-                            {displayedStops.length >= 2 && (
-                              <Pressable
-                                style={styles.photoMoveMiniBtn}
-                                onPress={() => openMovePhotoModal(stop, photo)}>
-                                <Feather
-                                  name="corner-up-right"
-                                  size={11}
-                                  color={Palette.indigo600}
-                                />
-                              </Pressable>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-
-                  {/* Hàng nút thao tác nhanh Human-in-the-Loop ngay trên từng StopCard */}
-                  <View style={styles.cardQuickHitlRow}>
-                    <Pressable
-                      style={styles.cardQuickBtn}
-                      onPress={() => openRenameModal(stop)}>
-                      <Feather name="edit-2" size={12} color={Palette.textSecondary} />
-                      <Text style={styles.cardQuickBtnText}>Đổi tên</Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.cardQuickBtn}
-                      onPress={() => handleMergeStops(stop)}>
-                      <Ionicons
-                        name="git-merge-outline"
-                        size={13}
-                        color={Palette.teal600}
-                      />
-                      <Text style={[styles.cardQuickBtnText, { color: Palette.teal700 }]}>
-                        Gộp
-                      </Text>
-                    </Pressable>
-
-                    {canSplit && (
-                      <Pressable
-                        style={[styles.cardQuickBtn, styles.cardQuickBtnIndigo]}
-                        onPress={() => handleSplitStop(stop)}>
-                        <Ionicons
-                          name="git-branch-outline"
-                          size={13}
-                          color={Palette.indigo600}
-                        />
-                        <Text
-                          style={[
-                            styles.cardQuickBtnText,
-                            { color: Palette.indigo600 },
-                          ]}>
-                          Tách ({stop.photos.length} ảnh)
-                        </Text>
-                      </Pressable>
-                    )}
-
-                    <Pressable
-                      style={styles.cardQuickBtn}
-                      onPress={() => handleReorderStops(stop)}>
-                      <Ionicons
-                        name="swap-vertical-outline"
-                        size={13}
-                        color={Palette.textSecondary}
-                      />
-                      <Text style={styles.cardQuickBtnText}>Đổi chỗ</Text>
-                    </Pressable>
-
-                    {displayedStops.length >= 2 && (
-                      <Pressable
-                        style={styles.cardQuickBtn}
-                        onPress={() => openMovePhotoModal(stop)}>
-                        <Feather name="share" size={12} color={Palette.indigo600} />
-                        <Text
-                          style={[
-                            styles.cardQuickBtnText,
-                            { color: Palette.indigo600 },
-                          ]}>
-                          Chuyển ảnh
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </Pressable>
-              </View>
-            );
-          })}
-        </ScrollView>
+        />
       </View>
 
-      {/* MODAL 1: ĐỔI TÊN ĐIỂM DỪNG (RENAME - UC-11) */}
+      {/* MODAL 1: RENAME STOP (UC-11) */}
       <Modal
         visible={renameModalVisible}
         transparent
@@ -869,15 +634,20 @@ export default function TripTimelineMapScreen() {
         onRequestClose={() => setRenameModalVisible(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Đổi tên Điểm dừng (RENAME)</Text>
-              <Pressable onPress={() => setRenameModalVisible(false)}>
-                <Feather name="x" size={20} color={Palette.textSecondary} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Đặt tên Điểm dừng</Text>
+              <Pressable
+                style={({ pressed }) => [styles.modalCloseBtn, pressed && styles.pressed]}
+                onPress={() => setRenameModalVisible(false)}
+                hitSlop={TouchTarget.hitSlop}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng hộp thoại đổi tên">
+                <Feather name="x" size={IconSize.lg} color={Palette.textSecondary} />
               </Pressable>
             </View>
 
-            <Text style={styles.modalSub}>
-              Cập nhật tên địa danh chính xác và đánh dấu đã xác nhận thủ công:
+            <Text style={styles.modalSubtitle}>
+              Cập nhật tên địa danh cho chương nhật ký của bạn:
             </Text>
 
             <TextInput
@@ -889,38 +659,52 @@ export default function TripTimelineMapScreen() {
               autoFocus
             />
 
-            <View style={styles.quickNameSuggestions}>
-              {[
-                'Bãi Sau Vũng Tàu • Check-in Sáng',
-                'Đỉnh Tượng Chúa Kitô Vua',
-                'Mũi Nghinh Phong Ngắm Hoàng Hôn',
-                'Ngọn Hải Đăng Cổ Vũng Tàu',
-              ].map((suggestion) => (
+            <View style={styles.suggestionsWrap}>
+              {RENAME_SUGGESTIONS.map((label) => (
                 <Pressable
-                  key={suggestion}
-                  style={styles.suggestionPill}
-                  onPress={() => setRenameInputValue(suggestion)}>
-                  <Text style={styles.suggestionPillText}>{suggestion}</Text>
+                  key={label}
+                  style={({ pressed }) => [
+                    styles.suggestionPill,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => setRenameInputValue(label)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Gợi ý tên: ${label}`}>
+                  <Text style={styles.suggestionPillText}>{label}</Text>
                 </Pressable>
               ))}
             </View>
 
-            <View style={styles.modalFooterActions}>
+            <View style={styles.modalActionsRow}>
               <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setRenameModalVisible(false)}>
+                style={({ pressed }) => [styles.modalCancelBtn, pressed && styles.pressed]}
+                onPress={() => setRenameModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Hủy đổi tên">
                 <Text style={styles.modalCancelText}>Hủy</Text>
               </Pressable>
-              <Pressable style={styles.modalConfirmBtn} onPress={handleConfirmRename}>
-                <Ionicons name="checkmark-circle" size={16} color={Palette.textInverse} />
-                <Text style={styles.modalConfirmText}>Lưu & Xác nhận</Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalConfirmBtn,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleConfirmRename}
+                accessibilityRole="button"
+                accessibilityLabel="Lưu tên mới">
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={IconSize.md}
+                  color={Palette.surface}
+                />
+                <Text style={styles.modalConfirmText}>Lưu thay đổi</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL 2: CHUYỂN ẢNH LẺ GIỮA CÁC ĐIỂM DỪNG (MOVE_PHOTO - UC-11) */}
+      {/* MODAL 2: MOVE PHOTO TO ANOTHER STOP (UC-11) */}
       <Modal
         visible={movePhotoModalVisible}
         transparent
@@ -928,61 +712,85 @@ export default function TripTimelineMapScreen() {
         onRequestClose={() => setMovePhotoModalVisible(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chuyển ảnh giữa Điểm dừng (UC-11)</Text>
-              <Pressable onPress={() => setMovePhotoModalVisible(false)}>
-                <Feather name="x" size={20} color={Palette.textSecondary} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Chuyển ảnh sang Điểm dừng khác</Text>
+              <Pressable
+                style={({ pressed }) => [styles.modalCloseBtn, pressed && styles.pressed]}
+                onPress={() => setMovePhotoModalVisible(false)}
+                hitSlop={TouchTarget.hitSlop}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng hộp thoại chuyển ảnh">
+                <Feather name="x" size={IconSize.lg} color={Palette.textSecondary} />
               </Pressable>
             </View>
 
-            <Text style={styles.modalSub}>
-              1. Chọn bức ảnh cần di chuyển từ &ldquo;{moveSourceStop?.name}&rdquo;:
+            <Text style={styles.modalSubtitle}>
+              1. Chọn bức ảnh từ &ldquo;{moveSourceStop?.name}&rdquo;:
             </Text>
 
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.modalPhotosRow}>
+              contentContainerStyle={styles.modalPhotoSelectorRow}>
               {moveSourceStop?.photos.map((photo) => {
-                const active = selectedPhotoToMove?.photo_id === photo.photo_id;
+                const isSelected = selectedPhotoToMove?.photo_id === photo.photo_id;
                 return (
                   <Pressable
                     key={photo.photo_id}
-                    style={[
-                      styles.modalPhotoPickItem,
-                      active && styles.modalPhotoPickItemActive,
+                    style={({ pressed }) => [
+                      styles.modalPhotoChoice,
+                      isSelected && styles.modalPhotoChoiceActive,
+                      pressed && styles.pressed,
                     ]}
-                    onPress={() => setSelectedPhotoToMove(photo)}>
+                    onPress={() => setSelectedPhotoToMove(photo)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`Chọn ảnh chụp lúc ${formatTimeHm(photo.taken_at)}`}>
                     <Image
                       source={{ uri: photo.thumbnail_url }}
-                      style={styles.modalPhotoImg}
+                      style={styles.modalPhotoThumb}
                     />
-                    <Text style={styles.modalPhotoIdText}>#{photo.photo_id}</Text>
+                    <Text style={styles.modalPhotoChoiceText}>
+                      {formatTimeHm(photo.taken_at)}
+                    </Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
 
-            <Text style={styles.modalSub}>2. Chọn điểm dừng đích để chuyển ảnh tới:</Text>
+            <Text style={styles.modalSubtitle}>2. Chọn điểm dừng đích để chuyển tới:</Text>
 
             <View style={styles.targetStopsList}>
-              {candidateTargetStopsForPhoto.map((target) => (
-                <Pressable
-                  key={target.stop_id}
-                  style={styles.targetStopOption}
-                  onPress={() => handleConfirmMovePhoto(target)}>
-                  <View style={styles.targetStopBadge}>
-                    <Text style={styles.targetStopBadgeText}>#{target.global_index}</Text>
-                  </View>
-                  <View style={styles.flex1}>
-                    <Text style={styles.targetStopName}>{target.name}</Text>
-                    <Text style={styles.targetStopMeta}>
-                      Ngày {target.day_number} • {target.photos.length} ảnh hiện có
-                    </Text>
-                  </View>
-                  <Feather name="arrow-right-circle" size={18} color={Palette.indigo600} />
-                </Pressable>
-              ))}
+              {candidateTargetStopsForPhoto.length === 0 ? (
+                <Text style={styles.emptyTargetHint}>
+                  Không có điểm dừng khác để chuyển ảnh. Hãy tách điểm dừng trước.
+                </Text>
+              ) : (
+                candidateTargetStopsForPhoto.map((target) => (
+                  <Pressable
+                    key={target.stop_id}
+                    style={({ pressed }) => [
+                      styles.targetStopItem,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => handleConfirmMovePhoto(target)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Chuyển tới ${target.name}`}>
+                    <NumberedMapMarker index={target.global_index} size="sm" />
+                    <View style={styles.targetStopInfo}>
+                      <Text style={styles.targetStopName}>{target.name}</Text>
+                      <Text style={styles.targetStopMeta}>
+                        Ngày {target.day_number} • {target.photos.length} ảnh hiện có
+                      </Text>
+                    </View>
+                    <Feather
+                      name="arrow-right"
+                      size={IconSize.md}
+                      color={Palette.teal700}
+                    />
+                  </Pressable>
+                ))
+              )}
             </View>
           </View>
         </View>
@@ -996,84 +804,184 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.bgPrimary,
   },
-  rootContainer: {
-    flex: 1,
-    backgroundColor: Palette.bgPrimary,
-  },
-  flex1: {
-    flex: 1,
-  },
-  centerBox: {
+  loadingState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
-  loadingText: {
+  loadingStateText: {
     fontSize: 14,
     fontWeight: '600',
     color: Palette.textSubtle,
   },
-  mapSection: {
-    height: '42%',
+  rootContainer: {
+    flex: 1,
+    backgroundColor: Palette.bgPrimary,
+  },
+  mapContainer: {
+    height: '41%',
     width: '100%',
     position: 'relative',
-    backgroundColor: '#CBD5E1',
+    backgroundColor: Palette.teal50,
   },
   mapView: {
+    flex: 1,
     width: '100%',
     height: '100%',
   },
-  customMarkerBubble: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
+  webMapCanvas: {
+    flex: 1,
+    backgroundColor: Palette.teal50,
+    paddingTop: 68,
+    paddingHorizontal: Spacing.lg,
     justifyContent: 'center',
-    borderWidth: 2.5,
-    borderColor: Palette.surface,
-    ...Shadows.floating,
+    gap: Spacing.md,
   },
-  customMarkerBubbleDefault: {
-    backgroundColor: Palette.teal600,
+  webMapTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
-  customMarkerBubbleActive: {
-    backgroundColor: Palette.coral500,
-    transform: [{ scale: 1.14 }],
-  },
-  customMarkerNumber: {
-    color: Palette.textInverse,
+  webMapTitleText: {
+    color: Palette.teal800,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
+  },
+  webNodesRow: {
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+  },
+  webNodeChainItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  webNodeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Palette.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadows.subtle,
+  },
+  webNodeCardActive: {
+    borderColor: Palette.coral600,
+    backgroundColor: Palette.coral50,
+  },
+  webNodeMetaCol: {
+    maxWidth: 135,
+  },
+  webNodeName: {
+    color: Palette.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  webNodeCoord: {
+    fontFamily: MONO_FONT,
+    color: Palette.textSecondary,
+    fontSize: 10,
+  },
+  webPolylineSegment: {
+    width: 22,
+    height: 3,
+    backgroundColor: Palette.teal600,
+    marginHorizontal: 4,
   },
   floatingTopBar: {
     position: 'absolute',
     top: 8,
-    left: 14,
-    right: 14,
+    left: Spacing.lg,
+    right: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: Spacing.sm,
   },
-  floatingCircleBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Palette.glassOverlay,
+  floatingBackCircle: {
+    width: TouchTarget.minSize,
+    height: TouchTarget.minSize,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: Palette.border,
     ...Shadows.floating,
   },
-  floatingTitlePill: {
+  floatingActiveStopPill: {
     flex: 1,
+    minHeight: TouchTarget.minSize,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadows.floating,
+  },
+  activeCoralDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: Palette.coral600,
+  },
+  floatingActiveStopText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.textPrimary,
+    flexShrink: 1,
+  },
+  floatingSearchCircle: {
+    width: TouchTarget.minSize,
+    height: TouchTarget.minSize,
+    borderRadius: Radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Palette.indigo100,
+    ...Shadows.floating,
+  },
+  floatingMapBottomRow: {
+    position: 'absolute',
+    bottom: 26,
+    left: Spacing.lg,
+    right: Spacing.lg,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mapRouteSummaryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.glassOverlay,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadows.floating,
+  },
+  mapRouteSummaryText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Palette.textPrimary,
+  },
+  fitAllRouteBtn: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: Radius.pill,
@@ -1081,133 +989,12 @@ const styles = StyleSheet.create({
     borderColor: Palette.border,
     ...Shadows.floating,
   },
-  floatingTitleText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-  },
-  floatingAiSearchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: Palette.indigo600,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: Radius.pill,
-    ...Shadows.floating,
-  },
-  floatingAiSearchText: {
-    color: Palette.textInverse,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  floatingBottomMapControls: {
-    position: 'absolute',
-    bottom: 28,
-    left: 14,
-    right: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  editsCounterBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Palette.glassOverlay,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
-    ...Shadows.floating,
-  },
-  editsCounterText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.textPrimary,
-  },
-  editsCounterNum: {
-    color: Palette.indigo600,
-    fontWeight: '800',
-  },
-  fitRouteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Palette.glassOverlay,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.teal100,
-    ...Shadows.floating,
-  },
-  fitRouteButtonText: {
+  fitAllRouteBtnText: {
     fontSize: 12,
     fontWeight: '800',
     color: Palette.teal700,
   },
-  webMapFallback: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 48,
-    gap: 12,
-  },
-  webMapHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  webMapTitle: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  webMarkersRow: {
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  webMarkerChain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  webMarkerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  webMarkerCardActive: {
-    borderColor: Palette.coral500,
-    backgroundColor: '#31102F',
-  },
-  webMarkerTextCol: {
-    maxWidth: 140,
-  },
-  webMarkerName: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  webMarkerCoord: {
-    color: '#94A3B8',
-    fontSize: 11,
-  },
-  webPolylineConnector: {
-    width: 24,
-    height: 4,
-    backgroundColor: Palette.teal500,
-  },
-  floatingSheet: {
+  floatingSheetContainer: {
     flex: 1,
     marginTop: -20,
     backgroundColor: Palette.bgPrimary,
@@ -1216,13 +1003,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     ...Shadows.sheet,
   },
-  grabberWrapper: {
+  grabberRow: {
     alignItems: 'center',
     paddingVertical: 4,
   },
-  grabberPill: {
-    width: 42,
-    height: 5,
+  grabberHandle: {
+    width: 40,
+    height: 4,
     borderRadius: Radius.pill,
     backgroundColor: Palette.borderStrong,
   },
@@ -1230,415 +1017,126 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 4,
-    paddingBottom: 8,
-    gap: 10,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
-  sheetHeaderLeft: {
+  sheetTitleCol: {
     flex: 1,
   },
-  sheetTripTitle: {
-    fontSize: 19,
-    fontWeight: '800',
+  sheetEditorialTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 21,
+    fontWeight: '700',
     color: Palette.textPrimary,
     letterSpacing: -0.3,
   },
-  sheetTripSub: {
-    fontSize: 12,
-    color: Palette.textSecondary,
-    marginTop: 1,
-  },
-  sheetUploadPill: {
+  sheetUploadBtn: {
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: Palette.teal50,
-    borderWidth: 1,
-    borderColor: Palette.teal100,
+    backgroundColor: Palette.teal700,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.pill,
-  },
-  sheetUploadPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.teal700,
-  },
-  daySelectorWrapper: {
-    paddingBottom: 8,
-  },
-  dayPillsScroll: {
-    paddingHorizontal: 18,
-    gap: 8,
-  },
-  dayPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Palette.surface,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.pill,
-  },
-  dayPillActive: {
-    backgroundColor: Palette.teal600,
-    borderColor: Palette.teal600,
-  },
-  dayPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.textSecondary,
-  },
-  dayPillTextActive: {
-    color: Palette.textInverse,
-  },
-  hitlToolbarCard: {
-    marginHorizontal: 18,
-    marginBottom: 10,
-    backgroundColor: Palette.indigo50,
-    borderRadius: Radius.card,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
-    gap: 8,
-  },
-  hitlToolbarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  hitlTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  hitlToolbarTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Palette.indigo700,
-  },
-  resetPillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Palette.surface,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.border,
-  },
-  resetPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Palette.textSecondary,
-  },
-  hitlActionsScroll: {
-    gap: 8,
-  },
-  hitlActionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: Palette.surface,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
-  },
-  hitlActionPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.indigo600,
-  },
-  feedbackBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Palette.emeraldBg,
-    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.pill,
   },
-  feedbackBannerText: {
-    flex: 1,
+  sheetUploadBtnText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: Palette.emeraldText,
-  },
-  timelineScroll: {
-    flex: 1,
-  },
-  timelineScrollContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 90,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 12,
-  },
-  stepperLeftColumn: {
-    width: 32,
-    alignItems: 'center',
-  },
-  stepperNodeCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Palette.surface,
-    ...Shadows.subtle,
-  },
-  stepperNodeCircleDefault: {
-    backgroundColor: Palette.teal600,
-  },
-  stepperNodeCircleActive: {
-    backgroundColor: Palette.coral500,
-  },
-  stepperNodeText: {
-    color: Palette.textInverse,
-    fontSize: 12,
     fontWeight: '800',
+    color: Palette.surface,
   },
-  stepperVerticalLine: {
-    flex: 1,
-    width: 2.5,
-    backgroundColor: Palette.teal100,
-    marginVertical: 4,
+  dayTabsSection: {
+    paddingBottom: Spacing.sm,
   },
-  stopCard: {
-    flex: 1,
+  dayTabsScroll: {
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  dayTabPill: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Palette.surface,
-    borderRadius: Radius.card,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    gap: 10,
-    ...Shadows.card,
-  },
-  stopCardActive: {
-    borderColor: Palette.coral500,
-    borderWidth: 1.8,
-  },
-  stopCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  stopTitleBlock: {
-    flex: 1,
-    gap: 4,
-  },
-  stopTimePillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  timeRangeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Palette.teal50,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: Radius.pill,
-  },
-  timeRangeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Palette.teal700,
-  },
-  dayTagMini: {
-    backgroundColor: Palette.bgSecondary,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.pill,
-  },
-  dayTagMiniText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Palette.textSecondary,
-  },
-  stopNameText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-  },
-  confirmStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  confirmedBadgeBg: {
-    backgroundColor: Palette.emeraldBg,
-  },
-  autoClusteredBadgeBg: {
-    backgroundColor: Palette.indigo50,
-  },
-  confirmStatusText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  centroidRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  centroidText: {
-    fontSize: 12,
-    color: Palette.textSecondary,
-    fontWeight: '500',
-  },
-  photoCountDot: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.teal600,
-  },
-  photosHorizontalList: {
-    gap: 10,
-    paddingVertical: 2,
-  },
-  photoThumbCard: {
-    width: 116,
-    borderRadius: Radius.thumbnail,
-    overflow: 'hidden',
-    backgroundColor: Palette.bgSecondary,
     borderWidth: 1,
     borderColor: Palette.border,
   },
-  photoThumbImage: {
-    width: 116,
-    height: 82,
-    backgroundColor: '#CBD5E1',
+  dayTabPillActive: {
+    backgroundColor: Palette.teal700,
+    borderColor: Palette.teal700,
   },
-  exifGpsBadge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.pill,
-  },
-  exifGpsVerified: {
-    backgroundColor: Palette.emeraldBg,
-  },
-  exifGpsUnknown: {
-    backgroundColor: Palette.amberBg,
-  },
-  exifGpsBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  photoThumbFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    backgroundColor: Palette.surface,
-  },
-  photoThumbTime: {
-    fontSize: 11,
+  dayTabPillText: {
+    fontSize: 12,
     fontWeight: '700',
     color: Palette.textSecondary,
   },
-  photoMoveMiniBtn: {
-    padding: 3,
-    borderRadius: Radius.pill,
-    backgroundColor: Palette.indigo50,
+  dayTabPillTextActive: {
+    color: Palette.surface,
   },
-  cardQuickHitlRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+  stepperListContent: {
+    paddingHorizontal: Spacing.xl,
     paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: Palette.bgSecondary,
-  },
-  cardQuickBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Palette.bgPrimary,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.border,
-  },
-  cardQuickBtnIndigo: {
-    backgroundColor: Palette.indigo50,
-    borderColor: Palette.indigo100,
-  },
-  cardQuickBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Palette.textSecondary,
+    paddingBottom: 44,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: Palette.darkOverlay,
+    backgroundColor: 'rgba(24, 24, 27, 0.45)',
     justifyContent: 'center',
-    padding: 20,
+    paddingHorizontal: Spacing.xl,
   },
   modalCard: {
     backgroundColor: Palette.surface,
-    borderRadius: Radius.cardLg,
-    padding: 20,
-    gap: 14,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Palette.border,
     ...Shadows.floating,
   },
-  modalHeader: {
+  modalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontFamily: SERIF_FONT,
+    fontSize: 20,
+    fontWeight: '700',
     color: Palette.textPrimary,
   },
-  modalSub: {
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalSubtitle: {
     fontSize: 13,
+    fontWeight: '600',
     color: Palette.textSecondary,
   },
   modalInput: {
+    backgroundColor: Palette.bgPrimary,
     borderWidth: 1,
     borderColor: Palette.borderStrong,
-    borderRadius: Radius.input,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingVertical: 12,
     fontSize: 15,
+    fontWeight: '600',
     color: Palette.textPrimary,
-    backgroundColor: Palette.bgPrimary,
   },
-  quickNameSuggestions: {
+  suggestionsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: Spacing.sm,
   },
   suggestionPill: {
     backgroundColor: Palette.teal50,
     borderWidth: 1,
     borderColor: Palette.teal100,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
     borderRadius: Radius.pill,
   },
   suggestionPillText: {
@@ -1646,15 +1144,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Palette.teal700,
   },
-  modalFooterActions: {
+  modalActionsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 10,
     marginTop: 4,
   },
   modalCancelBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    minHeight: TouchTarget.minSize,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
     borderRadius: Radius.pill,
     backgroundColor: Palette.bgSecondary,
   },
@@ -1664,77 +1163,78 @@ const styles = StyleSheet.create({
     color: Palette.textSecondary,
   },
   modalConfirmBtn: {
+    minHeight: TouchTarget.minSize,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.xl,
     borderRadius: Radius.pill,
-    backgroundColor: Palette.teal600,
+    backgroundColor: Palette.teal700,
   },
   modalConfirmText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: Palette.textInverse,
+    fontWeight: '800',
+    color: Palette.surface,
   },
-  modalPhotosRow: {
+  modalPhotoSelectorRow: {
     gap: 10,
+    paddingVertical: 4,
   },
-  modalPhotoPickItem: {
-    alignItems: 'center',
-    padding: 6,
-    borderRadius: Radius.thumbnail,
+  modalPhotoChoice: {
+    width: 92,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
     borderWidth: 2,
-    borderColor: Palette.border,
-    gap: 4,
+    borderColor: 'transparent',
+    backgroundColor: Palette.bgPrimary,
   },
-  modalPhotoPickItemActive: {
-    borderColor: Palette.indigo600,
-    backgroundColor: Palette.indigo50,
+  modalPhotoChoiceActive: {
+    borderColor: Palette.coral600,
   },
-  modalPhotoImg: {
-    width: 78,
-    height: 58,
-    borderRadius: 8,
+  modalPhotoThumb: {
+    width: '100%',
+    height: 64,
   },
-  modalPhotoIdText: {
+  modalPhotoChoiceText: {
     fontSize: 11,
     fontWeight: '700',
     color: Palette.textPrimary,
+    textAlign: 'center',
+    paddingVertical: 4,
   },
   targetStopsList: {
-    gap: 8,
+    gap: Spacing.sm,
+    maxHeight: 220,
   },
-  targetStopOption: {
+  emptyTargetHint: {
+    fontSize: 12,
+    color: Palette.textMuted,
+    fontStyle: 'italic',
+  },
+  targetStopItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 12,
-    borderRadius: Radius.input,
     backgroundColor: Palette.bgPrimary,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Palette.border,
   },
-  targetStopBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Palette.teal600,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  targetStopBadgeText: {
-    color: Palette.textInverse,
-    fontSize: 11,
-    fontWeight: '800',
+  targetStopInfo: {
+    flex: 1,
   },
   targetStopName: {
-    fontSize: 14,
+    fontFamily: SERIF_FONT,
+    fontSize: 15,
     fontWeight: '700',
     color: Palette.textPrimary,
   },
   targetStopMeta: {
     fontSize: 11,
     color: Palette.textSecondary,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

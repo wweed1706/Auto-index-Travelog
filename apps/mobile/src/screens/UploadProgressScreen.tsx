@@ -15,12 +15,22 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Palette, Radius, Shadows } from '@/constants/designSystem';
+import { ExifStatusBadge } from '@/components/ui';
 import {
   createTripFromUploadedPhotos,
   getJobStatus,
   uploadTripPhotos,
 } from '@/services/mockApi';
+import {
+  IconSize,
+  MONO_FONT,
+  Palette,
+  Radius,
+  SERIF_FONT,
+  Shadows,
+  Spacing,
+  TouchTarget,
+} from '@/theme';
 import { PhotoItem, ProcessingJobResponse } from '@/types/trip';
 
 const SAMPLE_EXIF_PHOTOS: PhotoItem[] = [
@@ -51,7 +61,6 @@ const SAMPLE_EXIF_PHOTOS: PhotoItem[] = [
     original_url:
       'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=85',
     taken_at: '2026-10-24T12:20:00+07:00',
-    // Minh họa ảnh chụp thiếu tọa độ GPS: giữ nguyên null (unknown), không gán 0
     latitude: null,
     longitude: null,
   },
@@ -110,14 +119,16 @@ function parseExifCoordinate(rawCoord: unknown, ref?: unknown): number | null {
   return Number(numericValue.toFixed(5));
 }
 
-function parseExifDateTime(exif: Record<string, unknown> | null | undefined, index: number): string {
+function parseExifDateTime(
+  exif: Record<string, unknown> | null | undefined,
+  index: number
+): string {
   const rawDate =
     (exif?.DateTimeOriginal as string | undefined) ||
     (exif?.DateTimeDigitized as string | undefined) ||
     (exif?.DateTime as string | undefined);
 
   if (rawDate && typeof rawDate === 'string') {
-    // Chuẩn hóa "YYYY:MM:DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SS+07:00"
     const normalized = rawDate
       .trim()
       .replace(/^(\d{4}):(\d{2}):(\d{2})\s+/, '$1-$2-$3T');
@@ -128,7 +139,6 @@ function parseExifDateTime(exif: Record<string, unknown> | null | undefined, ind
     }
   }
 
-  // Fallback giữ trình tự thời gian hợp lệ
   const hour = String(8 + (index % 10)).padStart(2, '0');
   const min = String((index * 12) % 60).padStart(2, '0');
   return `2026-10-24T${hour}:${min}:00+07:00`;
@@ -137,29 +147,29 @@ function parseExifDateTime(exif: Record<string, unknown> | null | undefined, ind
 const PIPELINE_STEPS = [
   {
     step: 1,
-    title: 'Trích xuất & Chuẩn hóa EXIF',
-    desc: 'Đọc DateTimeOriginal & tọa độ GPS, đánh dấu unknown (null) cho ảnh khuyết GPS',
+    title: 'Đọc & Chuẩn hóa EXIF Metadata',
+    desc: 'Trích xuất DateTimeOriginal & tọa độ GPS, giữ nguyên null cho ảnh thiếu GPS',
     threshold: 25,
     icon: 'compass-outline' as const,
   },
   {
     step: 2,
-    title: 'Trích xuất Vector CLIP (PyTorch)',
-    desc: 'Mã hóa đặc trưng thị giác vào không gian nhúng đa phương thức (pgvector)',
+    title: 'Mã hóa Đặc trưng Thị giác CLIP',
+    desc: 'Sinh vector nhúng đa phương thức (PyTorch + pgvector) phục vụ tìm kiếm tự nhiên',
     threshold: 55,
     icon: 'sparkles-outline' as const,
   },
   {
     step: 3,
-    title: 'Phân cụm Spatio-Temporal (DBSCAN)',
-    desc: 'Gom nhóm sự kiện/điểm dừng theo khoảng cách PostGIS & ngưỡng thời gian',
+    title: 'Phân cụm Không gian - Thời gian',
+    desc: 'Tự động gom nhóm điểm dừng theo khoảng cách địa lý & ngưỡng thời gian',
     threshold: 85,
     icon: 'git-network-outline' as const,
   },
   {
     step: 4,
-    title: 'Tái dựng Hành trình & Mở Bản đồ',
-    desc: 'Khởi tạo chuyến đi mới kèm Polyline thứ tự thời gian & trạng thái HITL',
+    title: 'Dựng Bản đồ & Dòng thời gian',
+    desc: 'Khởi tạo ấn phẩm hành trình kèm đường nối Polyline và thanh công cụ tinh chỉnh',
     threshold: 100,
     icon: 'map-outline' as const,
   },
@@ -169,26 +179,25 @@ export default function UploadProgressScreen() {
   const params = useLocalSearchParams<{ tripId?: string }>();
   const baseTripId = params.tripId ?? 'trip_123';
 
-  const [tripTitle, setTripTitle] = useState<string>('Khám phá Biển Đảo • Auto-Index');
+  const [tripTitle, setTripTitle] = useState<string>('Ký ức Biển Đảo • Ấn phẩm mới');
   const [selectedPhotos, setSelectedPhotos] = useState<PhotoItem[]>(SAMPLE_EXIF_PHOTOS);
   const [pickerSourceLabel, setPickerSourceLabel] = useState<string>(
-    'Bộ ảnh mẫu chuẩn EXIF (Có & Khuyết GPS)'
+    'Bộ ảnh mẫu chuẩn EXIF (4 ảnh có GPS • 2 ảnh khuyết GPS)'
   );
   const [job, setJob] = useState<ProcessingJobResponse | null>(null);
   const [isRunningPipeline, setIsRunningPipeline] = useState<boolean>(false);
   const [createdTripId, setCreatedTripId] = useState<string | null>(null);
 
-  // Thống kê Bento 3 ô: Tổng ảnh, Có GPS hợp lệ, Khuyết GPS (unknown / null)
   const exifStats = useMemo(() => {
     const total = selectedPhotos.length;
     const validGps = selectedPhotos.filter(
       (p) => p.latitude !== null && p.longitude !== null
     ).length;
     const unknownGps = total - validGps;
-    return { total, validGps, unknownGps };
+    const coveragePercent = total > 0 ? Math.round((validGps / total) * 100) : 0;
+    return { total, validGps, unknownGps, coveragePercent };
   }, [selectedPhotos]);
 
-  // Mở thư viện ảnh thật của thiết bị với expo-image-picker (allowsMultipleSelection: true, exif: true)
   const handlePickRealPhotosFromDevice = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -229,7 +238,7 @@ export default function UploadProgressScreen() {
       });
 
       setSelectedPhotos(mappedPhotos);
-      setPickerSourceLabel(`Thư viện Thiết bị (${mappedPhotos.length} ảnh thực tế)`);
+      setPickerSourceLabel(`Thư viện Thiết bị (${mappedPhotos.length} bức ảnh thực tế)`);
       setJob(null);
       setCreatedTripId(null);
     } catch {
@@ -242,12 +251,11 @@ export default function UploadProgressScreen() {
 
   const handleLoadSampleExifBatch = () => {
     setSelectedPhotos(SAMPLE_EXIF_PHOTOS);
-    setPickerSourceLabel('Bộ ảnh mẫu chuẩn EXIF (Có & Khuyết GPS)');
+    setPickerSourceLabel('Bộ ảnh mẫu chuẩn EXIF (4 ảnh có GPS • 2 ảnh khuyết GPS)');
     setJob(null);
     setCreatedTripId(null);
   };
 
-  // Kích hoạt tiến trình Auto-Indexing -> Tạo chuyến đi mới -> Mở màn hình Timeline + Map
   const handleStartAutoIndexing = async () => {
     if (selectedPhotos.length === 0 || isRunningPipeline) return;
     setIsRunningPipeline(true);
@@ -258,14 +266,12 @@ export default function UploadProgressScreen() {
       const initialJob = await uploadTripPhotos(baseTripId, uris);
       setJob(initialJob);
 
-      // Chạy tuần tự qua các bước của Auto-Indexing Engine
       const step55 = await getJobStatus(initialJob.job_id, 55, baseTripId);
       setJob(step55);
 
       const step85 = await getJobStatus(initialJob.job_id, 85, baseTripId);
       setJob(step85);
 
-      // Tạo chuyến đi mới từ danh sách ảnh đã chọn
       const newTripTimeline = await createTripFromUploadedPhotos({
         title: tripTitle,
         photos: selectedPhotos,
@@ -279,7 +285,6 @@ export default function UploadProgressScreen() {
       setJob(step100);
       setCreatedTripId(newTripTimeline.trip_id);
 
-      // Tự động điều hướng sang màn hình Timeline + Bản đồ của chuyến đi vừa tạo
       router.push({
         pathname: '/trips/[tripId]',
         params: { tripId: newTripTimeline.trip_id },
@@ -294,305 +299,273 @@ export default function UploadProgressScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Top Header */}
+        {/* Top Navigation Row */}
         <View style={styles.topHeaderRow}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <Feather name="arrow-left" size={16} color={Palette.textPrimary} />
-            <Text style={styles.backButtonText}>Quay lại</Text>
+          <Pressable
+            style={({ pressed }) => [styles.backCircleBtn, pressed && styles.pressed]}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại màn hình trước">
+            <Feather name="arrow-left" size={IconSize.md} color={Palette.textPrimary} />
           </Pressable>
 
-          <View style={styles.phaseBadge}>
-            <Ionicons name="shield-checkmark" size={13} color={Palette.teal600} />
-            <Text style={styles.phaseBadgeText}>EXIF Integrity • Giai đoạn 2</Text>
+          <View style={styles.studioLightPill}>
+            <View style={styles.studioTealDot} />
+            <Text style={styles.studioLightPillText}>THÊM ẢNH HÀNH TRÌNH</Text>
           </View>
         </View>
 
-        <View style={styles.titleSection}>
-          <Text style={styles.screenTitle}>Chọn Ảnh & Kiểm tra EXIF</Text>
-          <Text style={styles.screenSubtitle}>
-            Tích hợp <Text style={styles.codeHighlight}>expo-image-picker</Text> đọc trực tiếp
-            metadata thời gian & tọa độ GPS gốc. Ảnh thiếu GPS được gắn nhãn{' '}
-            <Text style={styles.amberHighlight}>unknown (null)</Text>, tuyệt đối không gán 0.
+        {/* Luminous Gallery White Studio Import Card (No Dark Background!) */}
+        <View style={styles.lightStudioCard}>
+          <Text style={styles.studioSerifTitle}>
+            Khởi tạo Hành trình từ Thư viện Ảnh
           </Text>
-        </View>
+          <Text style={styles.studioSubtitle}>
+            Chọn nhiều ảnh từ thiết bị để tự động kiểm tra tọa độ GPS, thời gian chụp và
+            dựng bản đồ hành trình.
+          </Text>
 
-        {/* Bước 1: Chọn ảnh từ thiết bị & Đặt tên Chuyến đi */}
-        <View style={styles.sectionCard}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.stepCircleTeal}>
-              <Text style={styles.stepCircleText}>1</Text>
-            </View>
-            <View style={styles.flex1}>
-              <Text style={styles.cardTitle}>Chọn bộ sưu tập ảnh chuyến đi</Text>
-              <Text style={styles.cardSubtitle}>Nguồn hiện tại: {pickerSourceLabel}</Text>
-            </View>
-          </View>
-
-          {/* Ô nhập Tên chuyến đi mới */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Tên chuyến đi sẽ khởi tạo:</Text>
-            <View style={styles.titleInputBox}>
-              <Ionicons name="flag-outline" size={17} color={Palette.teal600} />
+          <View style={styles.titleInputBox}>
+            <Text style={styles.titleInputLabel}>TÊN ẤN PHẨM HÀNH TRÌNH</Text>
+            <View style={styles.titleInputRow}>
+              <Feather name="book-open" size={IconSize.sm} color={Palette.teal700} />
               <TextInput
-                style={styles.titleInput}
+                style={styles.titleTextInput}
                 value={tripTitle}
                 onChangeText={setTripTitle}
-                placeholder="Nhập tên chuyến đi mới..."
+                placeholder="Nhập tên chuyến đi..."
                 placeholderTextColor={Palette.textMuted}
+                accessibilityLabel="Tên chuyến đi mới"
               />
             </View>
           </View>
 
-          {/* Nút mở Thư viện ảnh thật (expo-image-picker) + Nút nạp ảnh mẫu */}
-          <View style={styles.pickerButtonsRow}>
+          <View style={styles.pickerActionRow}>
             <Pressable
-              style={styles.realPickerButton}
-              onPress={handlePickRealPhotosFromDevice}>
-              <Ionicons name="images" size={18} color={Palette.textInverse} />
-              <Text style={styles.realPickerButtonText}>
-                Chọn ảnh từ Thiết bị (EXIF)
+              style={({ pressed }) => [
+                styles.devicePickerPrimaryBtn,
+                pressed && styles.pressed,
+              ]}
+              onPress={handlePickRealPhotosFromDevice}
+              accessibilityRole="button"
+              accessibilityLabel="Chọn nhiều ảnh thật từ thư viện thiết bị">
+              <Ionicons name="images" size={IconSize.md} color={Palette.surface} />
+              <Text style={styles.devicePickerPrimaryText}>Chọn ảnh từ Thiết bị</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.sampleBatchSecondaryBtn,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleLoadSampleExifBatch}
+              accessibilityRole="button"
+              accessibilityLabel="Nạp bộ ảnh mẫu EXIF">
+              <Feather name="refresh-cw" size={IconSize.xs} color={Palette.teal700} />
+              <Text style={styles.sampleBatchSecondaryText}>Ảnh mẫu</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* 3-Column Bento EXIF Diagnostic Strip + Coverage Bar */}
+        <View style={styles.diagnosticCard}>
+          <View style={styles.diagnosticTopHeader}>
+            <Text style={styles.diagnosticSectionTitle}>Chẩn đoán Metadata EXIF</Text>
+            <Text style={styles.diagnosticSourceText} numberOfLines={1}>
+              {pickerSourceLabel}
+            </Text>
+          </View>
+
+          <View style={styles.bentoStatsRow}>
+            <View style={styles.bentoStatCell}>
+              <Text style={styles.bentoStatNumber}>{exifStats.total}</Text>
+              <Text style={styles.bentoStatLabel}>Tổng số ảnh</Text>
+            </View>
+
+            <View style={[styles.bentoStatCell, styles.bentoStatEmerald]}>
+              <Text style={[styles.bentoStatNumber, styles.emeraldNumber]}>
+                {exifStats.validGps}
               </Text>
-            </Pressable>
+              <Text style={styles.bentoStatLabel}>Có tọa độ GPS</Text>
+            </View>
 
-            <Pressable
-              style={styles.sampleBatchButton}
-              onPress={handleLoadSampleExifBatch}>
-              <Ionicons name="sparkles-outline" size={16} color={Palette.indigo600} />
-              <Text style={styles.sampleBatchButtonText}>Bộ mẫu</Text>
-            </Pressable>
+            <View style={[styles.bentoStatCell, styles.bentoStatAmber]}>
+              <Text style={[styles.bentoStatNumber, styles.amberNumber]}>
+                {exifStats.unknownGps}
+              </Text>
+              <Text style={styles.bentoStatLabel}>Khuyết GPS (null)</Text>
+            </View>
+          </View>
+
+          {/* GPS Coverage Bar */}
+          <View style={styles.coverageBarGroup}>
+            <View style={styles.coverageLabelRow}>
+              <Text style={styles.coverageLabelText}>Tỷ lệ ảnh có tọa độ định vị</Text>
+              <Text style={styles.coveragePercentText}>
+                {exifStats.coveragePercent}% hợp lệ
+              </Text>
+            </View>
+            <View style={styles.coverageTrack}>
+              <View
+                style={[
+                  styles.coverageFill,
+                  { width: `${exifStats.coveragePercent}%` },
+                ]}
+              />
+            </View>
           </View>
         </View>
 
-        {/* Bước 2: Bento Summary Grid (3 thẻ thống kê EXIF GPS) */}
-        <View style={styles.bentoGridContainer}>
-          {/* Thẻ 1: Tổng số ảnh */}
-          <View style={[styles.bentoStatCard, styles.bentoTotalCard]}>
-            <View style={[styles.bentoIconCircle, { backgroundColor: Palette.indigo50 }]}>
-              <Ionicons name="layers" size={18} color={Palette.indigo600} />
-            </View>
-            <Text style={styles.bentoNumber}>{exifStats.total}</Text>
-            <Text style={styles.bentoLabel}>Tổng số ảnh</Text>
-            <Text style={styles.bentoSubLabel}>Đã nạp vào bộ đệm</Text>
+        {/* Filmstrip Preview Grid */}
+        <View style={styles.filmstripSection}>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionSerifTitle}>Cuộn phim Đã chọn</Text>
+            <Text style={styles.sectionSubCount}>{selectedPhotos.length} khung hình</Text>
           </View>
 
-          {/* Thẻ 2: Có GPS hợp lệ (Emerald) */}
-          <View style={[styles.bentoStatCard, styles.bentoEmeraldCard]}>
-            <View style={[styles.bentoIconCircle, { backgroundColor: Palette.emeraldBg }]}>
-              <Ionicons name="location" size={18} color={Palette.emeraldText} />
-            </View>
-            <Text style={[styles.bentoNumber, { color: Palette.emeraldText }]}>
-              {exifStats.validGps}
-            </Text>
-            <Text style={[styles.bentoLabel, { color: Palette.emeraldText }]}>
-              Có GPS hợp lệ
-            </Text>
-            <Text style={styles.bentoSubLabel}>GPS Verified</Text>
-          </View>
-
-          {/* Thẻ 3: Khuyết GPS unknown (Amber) */}
-          <View style={[styles.bentoStatCard, styles.bentoAmberCard]}>
-            <View style={[styles.bentoIconCircle, { backgroundColor: Palette.amberBg }]}>
-              <Ionicons name="warning" size={18} color={Palette.amberText} />
-            </View>
-            <Text style={[styles.bentoNumber, { color: Palette.amberText }]}>
-              {exifStats.unknownGps}
-            </Text>
-            <Text style={[styles.bentoLabel, { color: Palette.amberText }]}>
-              Khuyết GPS
-            </Text>
-            <Text style={styles.bentoSubLabel}>unknown (null)</Text>
-          </View>
-        </View>
-
-        {/* Bước 3: Danh sách ảnh Preview kèm Badge GPS */}
-        <View style={styles.sectionCard}>
-          <View style={styles.previewHeaderRow}>
-            <Text style={styles.cardTitle}>
-              Kiểm tra EXIF từng ảnh ({selectedPhotos.length} ảnh)
-            </Text>
-            <View style={styles.integrityRuleTag}>
-              <Text style={styles.integrityRuleText}>Null-Safe GPS</Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.previewPhotosScroll}>
-            {selectedPhotos.map((photo, index) => {
-              const hasValidGps =
-                photo.latitude !== null && photo.longitude !== null;
+          <View style={styles.photoGridWrap}>
+            {selectedPhotos.map((photo, idx) => {
+              const hasGps = photo.latitude !== null && photo.longitude !== null;
               return (
-                <View key={photo.photo_id} style={styles.previewPhotoCard}>
-                  <View style={styles.previewImageWrap}>
+                <View key={photo.photo_id} style={styles.filmCard}>
+                  <View style={styles.filmImageContainer}>
                     <Image
                       source={{ uri: photo.thumbnail_url }}
-                      style={styles.previewImage}
+                      style={styles.filmImage}
                       resizeMode="cover"
                     />
-                    <View style={styles.photoIndexPill}>
-                      <Text style={styles.photoIndexText}>#{index + 1}</Text>
+                    <View style={styles.filmTopLeftBadge}>
+                      <ExifStatusBadge hasGps={hasGps} compact />
                     </View>
-
-                    {/* Badge trạng thái EXIF GPS trên góc ảnh */}
-                    <View
-                      style={[
-                        styles.previewGpsBadge,
-                        hasValidGps
-                          ? styles.previewGpsVerified
-                          : styles.previewGpsUnknown,
-                      ]}>
-                      <Ionicons
-                        name={hasValidGps ? 'checkmark-circle' : 'alert-circle'}
-                        size={11}
-                        color={hasValidGps ? Palette.emeraldText : Palette.amberText}
-                      />
-                      <Text
-                        style={[
-                          styles.previewGpsBadgeText,
-                          {
-                            color: hasValidGps
-                              ? Palette.emeraldText
-                              : Palette.amberText,
-                          },
-                        ]}>
-                        {hasValidGps ? 'GPS Verified' : 'GPS Unknown'}
-                      </Text>
+                    <View style={styles.filmIndexPill}>
+                      <Text style={styles.filmIndexText}>#{idx + 1}</Text>
                     </View>
                   </View>
 
-                  <View style={styles.previewMetaBody}>
-                    <View style={styles.previewMetaLine}>
-                      <Feather name="clock" size={11} color={Palette.textSecondary} />
-                      <Text style={styles.previewMetaTime} numberOfLines={1}>
-                        {photo.taken_at.slice(0, 16).replace('T', ' ')}
-                      </Text>
-                    </View>
-
+                  <View style={styles.filmMetaFooter}>
+                    <Text style={styles.filmTimeText}>
+                      {photo.taken_at.slice(0, 16).replace('T', ' • ')}
+                    </Text>
                     <Text
                       style={[
-                        styles.previewCoordText,
-                        !hasValidGps && { color: Palette.amberText },
+                        styles.filmCoordText,
+                        !hasGps && styles.filmCoordMissing,
                       ]}
                       numberOfLines={1}>
-                      {hasValidGps
-                        ? `${photo.latitude?.toFixed(4)}, ${photo.longitude?.toFixed(4)}`
-                        : 'lat/lng: null (unknown)'}
+                      {hasGps
+                        ? `${photo.latitude?.toFixed(4)}°N, ${photo.longitude?.toFixed(4)}°E`
+                        : 'GPS: null (unknown)'}
                     </Text>
                   </View>
                 </View>
               );
             })}
-          </ScrollView>
-
-          {/* Nút kích hoạt Auto-Indexing Pipeline */}
-          <Pressable
-            style={[
-              styles.launchPipelineBtn,
-              isRunningPipeline && styles.disabledBtn,
-            ]}
-            onPress={handleStartAutoIndexing}
-            disabled={isRunningPipeline}>
-            {isRunningPipeline ? (
-              <ActivityIndicator size="small" color={Palette.textInverse} />
-            ) : (
-              <Ionicons name="rocket" size={18} color={Palette.textInverse} />
-            )}
-            <Text style={styles.launchPipelineBtnText}>
-              {isRunningPipeline
-                ? 'Đang chạy Auto-Indexing & Dựng Hành trình...'
-                : `Chạy Auto-Indexing (${selectedPhotos.length} ảnh) & Mở Bản đồ`}
-            </Text>
-          </Pressable>
+          </View>
         </View>
 
-        {/* Bước 4: Auto-Indexing Pipeline Stepper */}
-        <View style={styles.sectionCard}>
+        {/* 4-Step Auto-Indexing Pipeline Card */}
+        <View style={styles.pipelineCard}>
           <View style={styles.pipelineHeaderRow}>
-            <View style={styles.stepCircleIndigo}>
-              <Ionicons name="hardware-chip" size={15} color={Palette.textInverse} />
+            <View>
+              <Text style={styles.pipelineEyebrow}>TIẾN TRÌNH XỬ LÝ TỰ ĐỘNG</Text>
+              <Text style={styles.pipelineSerifTitle}>Auto-Indexing Pipeline</Text>
             </View>
-            <View style={styles.flex1}>
-              <Text style={styles.cardTitle}>Auto-Indexing Pipeline Stepper</Text>
-              <Text style={styles.cardSubtitle}>
-                {job
-                  ? `${job.message} (${job.progress_percent}%)`
-                  : 'Sẵn sàng xử lý: Đọc EXIF → CLIP Vector → Spatio-Temporal → Bản đồ'}
+
+            <View style={styles.progressBadgePill}>
+              <Text style={styles.progressBadgeText}>
+                {job ? `${job.progress_percent}%` : 'Sẵn sàng'}
               </Text>
             </View>
           </View>
 
-          {/* Thanh phần trăm tổng thể */}
           <View style={styles.progressBarTrack}>
             <View
               style={[
                 styles.progressBarFill,
-                { width: `${job ? job.progress_percent : 0}%` },
+                { width: `${job?.progress_percent ?? 0}%` },
               ]}
             />
           </View>
 
-          {/* 4 bước trong Pipeline */}
-          <View style={styles.pipelineStepsList}>
+          <View style={styles.stepsContainer}>
             {PIPELINE_STEPS.map((item) => {
               const currentPct = job?.progress_percent ?? 0;
               const isDone = currentPct >= item.threshold;
-              const isCurrent =
-                currentPct > 0 &&
-                currentPct < item.threshold &&
-                currentPct >= item.threshold - 35;
-
               return (
-                <View key={item.step} style={styles.pipelineStepRow}>
+                <View key={item.step} style={styles.stepRow}>
                   <View
                     style={[
-                      styles.pipelineIconCircle,
-                      isDone
-                        ? styles.pipelineIconDone
-                        : isCurrent
-                          ? styles.pipelineIconActive
-                          : styles.pipelineIconPending,
+                      styles.stepCircle,
+                      isDone ? styles.stepCircleDone : styles.stepCircleIdle,
                     ]}>
                     <Ionicons
                       name={isDone ? 'checkmark' : item.icon}
-                      size={15}
-                      color={
-                        isDone || isCurrent
-                          ? Palette.textInverse
-                          : Palette.textMuted
-                      }
+                      size={IconSize.sm}
+                      color={isDone ? Palette.surface : Palette.textMuted}
                     />
                   </View>
 
-                  <View style={styles.pipelineStepTextCol}>
+                  <View style={styles.stepTextCol}>
                     <Text
                       style={[
-                        styles.pipelineStepTitle,
-                        isDone && { color: Palette.teal700 },
+                        styles.stepTitleText,
+                        isDone && styles.stepTitleTextDone,
                       ]}>
-                      Bước {item.step}: {item.title}
+                      {item.step}. {item.title}
                     </Text>
-                    <Text style={styles.pipelineStepDesc}>{item.desc}</Text>
+                    <Text style={styles.stepDescText}>{item.desc}</Text>
                   </View>
                 </View>
               );
             })}
           </View>
 
+          <Pressable
+            style={({ pressed }) => [
+              styles.runPipelineCtaBtn,
+              isRunningPipeline && styles.buttonDisabled,
+              pressed && styles.pressed,
+            ]}
+            onPress={handleStartAutoIndexing}
+            disabled={isRunningPipeline}
+            accessibilityRole="button"
+            accessibilityLabel="Chạy Auto-Indexing và mở Bản đồ Hành trình">
+            {isRunningPipeline ? (
+              <>
+                <ActivityIndicator size="small" color={Palette.surface} />
+                <Text style={styles.runPipelineCtaText}>
+                  Đang phân cụm & dựng hành trình...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="sparkles" size={IconSize.md} color={Palette.surface} />
+                <Text style={styles.runPipelineCtaText}>
+                  Tái dựng Hành trình & Mở Bản đồ ({selectedPhotos.length} ảnh)
+                </Text>
+                <Feather name="arrow-right" size={IconSize.md} color={Palette.surface} />
+              </>
+            )}
+          </Pressable>
+
           {createdTripId && (
             <Pressable
-              style={styles.openCreatedTripBtn}
+              style={({ pressed }) => [
+                styles.openCreatedTripBtn,
+                pressed && styles.pressed,
+              ]}
               onPress={() =>
                 router.push({
                   pathname: '/trips/[tripId]',
                   params: { tripId: createdTripId },
                 })
-              }>
-              <Ionicons name="map" size={17} color={Palette.textInverse} />
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Mở ngay chuyến đi vừa tạo">
+              <Ionicons name="map-outline" size={IconSize.md} color={Palette.teal700} />
               <Text style={styles.openCreatedTripBtnText}>
-                Mở Hành trình Mới (#{createdTripId}) trên Timeline & Bản đồ
+                Mở lại chuyến đi vừa tạo ({createdTripId})
               </Text>
-              <Feather name="arrow-right" size={16} color={Palette.textInverse} />
             </Pressable>
           )}
         </View>
@@ -606,410 +579,437 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.bgPrimary,
   },
-  flex1: {
-    flex: 1,
-  },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 90,
-    gap: 16,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.sm,
+    paddingBottom: 64,
+    gap: Spacing.xl,
   },
   topHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  backButton: {
+  backCircleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.subtle,
+  },
+  studioLightPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadows.subtle,
-  },
-  backButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Palette.textPrimary,
-  },
-  phaseBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
     backgroundColor: Palette.teal50,
     borderWidth: 1,
     borderColor: Palette.teal100,
-    paddingHorizontal: 11,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.pill,
   },
-  phaseBadgeText: {
-    fontSize: 11,
+  studioTealDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Palette.teal600,
+  },
+  studioLightPillText: {
+    fontSize: 10,
     fontWeight: '800',
     color: Palette.teal700,
+    letterSpacing: 0.8,
   },
-  titleSection: {
-    gap: 6,
-  },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-    letterSpacing: -0.4,
-  },
-  screenSubtitle: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: Palette.textSecondary,
-  },
-  codeHighlight: {
-    fontWeight: '700',
-    color: Palette.indigo600,
-  },
-  amberHighlight: {
-    fontWeight: '800',
-    color: Palette.amberText,
-  },
-  sectionCard: {
+  lightStudioCard: {
     backgroundColor: Palette.surface,
-    borderRadius: Radius.card,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    gap: 14,
+    borderRadius: Radius.hero,
+    padding: Spacing.xl,
+    gap: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: Palette.teal100,
     ...Shadows.card,
   },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  stepCircleTeal: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Palette.teal600,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepCircleIndigo: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Palette.indigo600,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepCircleText: {
-    color: Palette.textInverse,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: Palette.textSecondary,
-  },
-  inputGroup: {
-    gap: 6,
-  },
-  inputLabel: {
-    fontSize: 12,
+  studioSerifTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 25,
     fontWeight: '700',
+    lineHeight: 32,
+    color: Palette.textPrimary,
+    letterSpacing: -0.3,
+  },
+  studioSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
     color: Palette.textSecondary,
   },
   titleInputBox: {
+    gap: 6,
+    marginTop: 4,
+  },
+  titleInputLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.teal700,
+    letterSpacing: 0.8,
+  },
+  titleInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     backgroundColor: Palette.bgPrimary,
+    borderRadius: Radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     borderWidth: 1,
     borderColor: Palette.border,
-    borderRadius: Radius.input,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
-  titleInput: {
+  titleTextInput: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Palette.textPrimary,
-    paddingVertical: 0,
   },
-  pickerButtonsRow: {
+  pickerActionRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: Spacing.sm,
+    marginTop: 4,
   },
-  realPickerButton: {
+  devicePickerPrimaryBtn: {
     flex: 1,
+    minHeight: TouchTarget.minSize,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Palette.teal600,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
+    backgroundColor: Palette.teal700,
     borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.lg,
     ...Shadows.subtle,
   },
-  realPickerButtonText: {
-    color: Palette.textInverse,
+  devicePickerPrimaryText: {
     fontSize: 13,
     fontWeight: '800',
+    color: Palette.surface,
   },
-  sampleBatchButton: {
+  sampleBatchSecondaryBtn: {
+    minHeight: TouchTarget.minSize,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    backgroundColor: Palette.indigo50,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    gap: 6,
+    backgroundColor: Palette.teal50,
     borderRadius: Radius.pill,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
   },
-  sampleBatchButtonText: {
-    color: Palette.indigo600,
+  sampleBatchSecondaryText: {
     fontSize: 12,
     fontWeight: '800',
+    color: Palette.teal700,
   },
-  bentoGridContainer: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  bentoStatCard: {
-    flex: 1,
+  diagnosticCard: {
     backgroundColor: Palette.surface,
     borderRadius: Radius.card,
-    padding: 12,
+    padding: Spacing.lg,
+    gap: Spacing.md,
     borderWidth: 1,
-    gap: 4,
+    borderColor: Palette.border,
     ...Shadows.card,
   },
-  bentoTotalCard: {
-    borderColor: Palette.indigo100,
+  diagnosticTopHeader: {
+    gap: 2,
   },
-  bentoEmeraldCard: {
-    borderColor: Palette.emeraldBorder,
-    backgroundColor: '#F6FEF9',
-  },
-  bentoAmberCard: {
-    borderColor: Palette.amberBorder,
-    backgroundColor: '#FFFDF5',
-  },
-  bentoIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  bentoNumber: {
-    fontSize: 22,
-    fontWeight: '800',
+  diagnosticSectionTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 19,
+    fontWeight: '700',
     color: Palette.textPrimary,
   },
-  bentoLabel: {
+  diagnosticSourceText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-  },
-  bentoSubLabel: {
-    fontSize: 10,
     fontWeight: '600',
     color: Palette.textSubtle,
   },
-  previewHeaderRow: {
+  bentoStatsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  bentoStatCell: {
+    flex: 1,
+    backgroundColor: Palette.bgPrimary,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    alignItems: 'center',
+    gap: 2,
+    borderWidth: 1,
+    borderColor: Palette.border,
+  },
+  bentoStatEmerald: {
+    backgroundColor: Palette.emeraldBg,
+    borderColor: Palette.emeraldBorder,
+  },
+  bentoStatAmber: {
+    backgroundColor: Palette.amberBg,
+    borderColor: Palette.amberBorder,
+  },
+  bentoStatNumber: {
+    fontFamily: SERIF_FONT,
+    fontSize: 24,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+  },
+  emeraldNumber: {
+    color: Palette.emeraldText,
+  },
+  amberNumber: {
+    color: Palette.amberText,
+  },
+  bentoStatLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.textSecondary,
+    textAlign: 'center',
+  },
+  coverageBarGroup: {
+    gap: 6,
+  },
+  coverageLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  integrityRuleTag: {
-    backgroundColor: Palette.emeraldBg,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
+  coverageLabelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.textSecondary,
   },
-  integrityRuleText: {
-    fontSize: 10,
+  coveragePercentText: {
+    fontSize: 12,
     fontWeight: '800',
     color: Palette.emeraldText,
   },
-  previewPhotosScroll: {
-    gap: 12,
-    paddingVertical: 2,
+  coverageTrack: {
+    height: 8,
+    backgroundColor: Palette.bgSecondary,
+    borderRadius: Radius.pill,
+    overflow: 'hidden',
   },
-  previewPhotoCard: {
-    width: 148,
-    backgroundColor: Palette.bgPrimary,
-    borderRadius: Radius.thumbnail,
+  coverageFill: {
+    height: '100%',
+    backgroundColor: Palette.teal600,
+    borderRadius: Radius.pill,
+  },
+  filmstripSection: {
+    gap: Spacing.md,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  sectionSerifTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 21,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+  },
+  sectionSubCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.textMuted,
+  },
+  photoGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  filmCard: {
+    width: '47.8%',
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Palette.border,
+    ...Shadows.subtle,
   },
-  previewImageWrap: {
+  filmImageContainer: {
     width: '100%',
-    height: 104,
+    height: 128,
     position: 'relative',
-    backgroundColor: '#CBD5E1',
+    backgroundColor: Palette.bgSecondary,
   },
-  previewImage: {
+  filmImage: {
     width: '100%',
     height: '100%',
   },
-  photoIndexPill: {
+  filmTopLeftBadge: {
     position: 'absolute',
-    top: 6,
-    left: 6,
-    backgroundColor: Palette.darkOverlayStrong,
+    top: 7,
+    left: 7,
+  },
+  filmIndexPill: {
+    position: 'absolute',
+    bottom: 7,
+    right: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: Radius.pill,
   },
-  photoIndexText: {
+  filmIndexText: {
+    fontFamily: MONO_FONT,
     fontSize: 10,
     fontWeight: '800',
-    color: Palette.textInverse,
+    color: Palette.textPrimary,
   },
-  previewGpsBadge: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-  },
-  previewGpsVerified: {
-    backgroundColor: Palette.emeraldBg,
-  },
-  previewGpsUnknown: {
-    backgroundColor: Palette.amberBg,
-  },
-  previewGpsBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  previewMetaBody: {
-    padding: 9,
+  filmMetaFooter: {
+    padding: 10,
     gap: 3,
   },
-  previewMetaLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  previewMetaTime: {
+  filmTimeText: {
     fontSize: 11,
     fontWeight: '700',
     color: Palette.textPrimary,
   },
-  previewCoordText: {
+  filmCoordText: {
+    fontFamily: MONO_FONT,
     fontSize: 10,
-    fontWeight: '600',
     color: Palette.emeraldText,
   },
-  launchPipelineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Palette.indigo600,
-    paddingVertical: 14,
-    borderRadius: Radius.pill,
-    marginTop: 2,
-    ...Shadows.subtle,
+  filmCoordMissing: {
+    color: Palette.amberText,
   },
-  disabledBtn: {
-    opacity: 0.7,
-  },
-  launchPipelineBtnText: {
-    color: Palette.textInverse,
-    fontSize: 14,
-    fontWeight: '800',
+  pipelineCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.hero,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadows.card,
   },
   pipelineHeaderRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
+  },
+  pipelineEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.teal700,
+    letterSpacing: 0.9,
+  },
+  pipelineSerifTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 21,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+    marginTop: 2,
+  },
+  progressBadgePill: {
+    backgroundColor: Palette.teal50,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+  },
+  progressBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.teal700,
   },
   progressBarTrack: {
-    height: 9,
+    height: 8,
     backgroundColor: Palette.bgSecondary,
     borderRadius: Radius.pill,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: Palette.teal600,
+    backgroundColor: Palette.teal700,
     borderRadius: Radius.pill,
   },
-  pipelineStepsList: {
-    gap: 12,
+  stepsContainer: {
+    gap: Spacing.md,
   },
-  pipelineStepRow: {
+  stepRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: Spacing.md,
   },
-  pipelineIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  stepCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
-  pipelineIconDone: {
-    backgroundColor: Palette.teal600,
+  stepCircleDone: {
+    backgroundColor: Palette.teal700,
   },
-  pipelineIconActive: {
-    backgroundColor: Palette.indigo600,
-  },
-  pipelineIconPending: {
+  stepCircleIdle: {
     backgroundColor: Palette.bgSecondary,
   },
-  pipelineStepTextCol: {
+  stepTextCol: {
     flex: 1,
     gap: 2,
   },
-  pipelineStepTitle: {
+  stepTitleText: {
     fontSize: 13,
     fontWeight: '800',
-    color: Palette.textPrimary,
-  },
-  pipelineStepDesc: {
-    fontSize: 12,
-    lineHeight: 17,
     color: Palette.textSecondary,
   },
-  openCreatedTripBtn: {
+  stepTitleTextDone: {
+    color: Palette.textPrimary,
+  },
+  stepDescText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: Palette.textSubtle,
+  },
+  runPipelineCtaBtn: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Palette.teal600,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
+    gap: Spacing.sm,
+    backgroundColor: Palette.teal700,
     borderRadius: Radius.pill,
-    marginTop: 4,
+    paddingHorizontal: Spacing.xl,
+    ...Shadows.floating,
+  },
+  runPipelineCtaText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Palette.surface,
+  },
+  openCreatedTripBtn: {
+    minHeight: TouchTarget.minSize,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Palette.teal50,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
   },
   openCreatedTripBtnText: {
-    color: Palette.textInverse,
     fontSize: 13,
     fontWeight: '800',
+    color: Palette.teal700,
+  },
+  buttonDisabled: {
+    opacity: 0.65,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

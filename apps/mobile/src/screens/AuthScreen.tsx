@@ -2,6 +2,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,13 +14,27 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Palette, Radius, Shadows } from '@/constants/designSystem';
+import {
+  IconSize,
+  Palette,
+  Radius,
+  SERIF_FONT,
+  Shadows,
+  Spacing,
+  TouchTarget,
+} from '@/theme';
+
+const COVER_COLLAGE_URLS = [
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=600&q=80',
+];
 
 export default function AuthScreen() {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
-  const [email, setEmail] = useState('student1@retrip.edu.vn');
+  const [email, setEmail] = useState('explorer@retrip.vn');
   const [password, setPassword] = useState('retrip2026');
-  const [fullName, setFullName] = useState('Thành viên 1 • Mobile UX');
+  const [fullName, setFullName] = useState('Nguyễn Minh Khôi');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = () => {
@@ -35,62 +50,87 @@ export default function AuthScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
-          {/* Nút quay lại trang chủ */}
+          {/* Top Navigation Row */}
           <View style={styles.topNav}>
-            <Pressable style={styles.backPill} onPress={() => router.back()}>
-              <Feather name="arrow-left" size={16} color={Palette.textPrimary} />
-              <Text style={styles.backPillText}>Quay lại Hành trình</Text>
+            <Pressable
+              style={({ pressed }) => [styles.backCircleBtn, pressed && styles.pressed]}
+              onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel="Quay lại danh sách hành trình">
+              <Feather name="arrow-left" size={IconSize.md} color={Palette.textPrimary} />
             </Pressable>
+
+            <Text style={styles.topIssueText}>RETRIP JOURNAL • PASSPORT</Text>
           </View>
 
-          {/* Hero Brand Header */}
-          <View style={styles.heroBanner}>
-            <View style={styles.logoCircle}>
-              <Ionicons name="compass" size={34} color={Palette.textInverse} />
+          {/* Luminous Editorial Postcard Collage Hero Card (Light Theme) */}
+          <View style={styles.lightCoverCard}>
+            <View style={styles.postcardStripRow}>
+              {COVER_COLLAGE_URLS.map((uri, idx) => (
+                <View
+                  key={uri}
+                  style={[
+                    styles.postcardFrame,
+                    idx === 1 && styles.postcardFrameCenter,
+                  ]}>
+                  <Image
+                    source={{ uri }}
+                    style={styles.postcardImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ))}
             </View>
-            <View style={styles.brandBadge}>
-              <Ionicons name="sparkles" size={13} color={Palette.indigo600} />
-              <Text style={styles.brandBadgeText}>ReTrip v2.0 • Modern Wanderlust</Text>
-            </View>
-            <Text style={styles.heroTitle}>Nhật ký Hành trình Tự động</Text>
-            <Text style={styles.heroSubtitle}>
-              Tự động tái dựng Timeline & Bản đồ từ metadata EXIF kết hợp tìm kiếm ảnh thông minh
-              bằng ngôn ngữ tự nhiên (PyTorch + CLIP).
-            </Text>
 
-            <View style={styles.featurePillsRow}>
-              <View style={styles.featurePill}>
-                <Ionicons name="location" size={13} color={Palette.teal600} />
-                <Text style={styles.featurePillText}>PostGIS Timeline</Text>
-              </View>
-              <View style={styles.featurePill}>
-                <Ionicons name="sparkles" size={13} color={Palette.indigo600} />
-                <Text style={styles.featurePillText}>CLIP pgvector</Text>
-              </View>
-              <View style={styles.featurePill}>
-                <Ionicons name="shield-checkmark" size={13} color={Palette.emeraldText} />
-                <Text style={styles.featurePillText}>Chuẩn EXIF</Text>
-              </View>
+            <View style={styles.coverTextBlock}>
+              <Text style={styles.coverBrandTitle}>ReTrip.</Text>
+              <Text style={styles.coverSerifHeadline}>
+                Lưu giữ mọi hành trình như một cuốn tạp chí sống động.
+              </Text>
+              <Text style={styles.coverDescription}>
+                Đồng bộ nhật ký bản đồ, điểm dừng thời gian và tìm kiếm khoảnh khắc bằng
+                trí nhớ thị giác AI.
+              </Text>
             </View>
           </View>
 
-          {/* Card Form Đăng nhập / Đăng ký */}
-          <View style={styles.authCard}>
-            {/* Segmented Mode Switcher */}
+          {/* Minimalist Gallery White Passport Form Card */}
+          <View style={styles.formCard}>
             <View style={styles.segmentedControl}>
               <Pressable
-                style={[styles.segmentTab, !isRegisterMode && styles.segmentTabActive]}
-                onPress={() => setIsRegisterMode(false)}>
+                style={({ pressed }) => [
+                  styles.segmentButton,
+                  !isRegisterMode && styles.segmentButtonActive,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setIsRegisterMode(false)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: !isRegisterMode }}
+                accessibilityLabel="Chế độ Đăng nhập">
                 <Text
-                  style={[styles.segmentTabText, !isRegisterMode && styles.segmentTabTextActive]}>
+                  style={[
+                    styles.segmentButtonText,
+                    !isRegisterMode && styles.segmentButtonTextActive,
+                  ]}>
                   Đăng nhập
                 </Text>
               </Pressable>
+
               <Pressable
-                style={[styles.segmentTab, isRegisterMode && styles.segmentTabActive]}
-                onPress={() => setIsRegisterMode(true)}>
+                style={({ pressed }) => [
+                  styles.segmentButton,
+                  isRegisterMode && styles.segmentButtonActive,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setIsRegisterMode(true)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isRegisterMode }}
+                accessibilityLabel="Chế độ Tạo tài khoản">
                 <Text
-                  style={[styles.segmentTabText, isRegisterMode && styles.segmentTabTextActive]}>
+                  style={[
+                    styles.segmentButtonText,
+                    isRegisterMode && styles.segmentButtonTextActive,
+                  ]}>
                   Tạo tài khoản
                 </Text>
               </Pressable>
@@ -98,69 +138,110 @@ export default function AuthScreen() {
 
             {isRegisterMode && (
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Họ và tên</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="person-outline" size={18} color={Palette.textMuted} />
+                <Text style={styles.fieldLabel}>TÊN HIỂN THỊ TRÊN TẠP CHÍ</Text>
+                <View style={styles.inputRow}>
+                  <Ionicons
+                    name="person-outline"
+                    size={IconSize.md}
+                    color={Palette.textMuted}
+                  />
                   <TextInput
-                    style={styles.input}
+                    style={styles.textInput}
                     value={fullName}
                     onChangeText={setFullName}
                     placeholder="Nhập họ và tên của bạn"
                     placeholderTextColor={Palette.textMuted}
+                    accessibilityLabel="Họ và tên"
                   />
                 </View>
               </View>
             )}
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Địa chỉ Email</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={18} color={Palette.textMuted} />
+              <Text style={styles.fieldLabel}>ĐỊA CHỈ EMAIL</Text>
+              <View style={styles.inputRow}>
+                <Ionicons
+                  name="mail-outline"
+                  size={IconSize.md}
+                  color={Palette.textMuted}
+                />
                 <TextInput
-                  style={styles.input}
+                  style={styles.textInput}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  placeholder="ban@retrip.edu.vn"
+                  placeholder="explorer@retrip.vn"
                   placeholderTextColor={Palette.textMuted}
+                  accessibilityLabel="Địa chỉ Email"
                 />
               </View>
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Mật khẩu bảo mật</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={18} color={Palette.textMuted} />
+              <Text style={styles.fieldLabel}>MẬT KHẨU</Text>
+              <View style={styles.inputRow}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={IconSize.md}
+                  color={Palette.textMuted}
+                />
                 <TextInput
-                  style={styles.input}
+                  style={styles.textInput}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                   placeholder="Nhập mật khẩu"
                   placeholderTextColor={Palette.textMuted}
+                  accessibilityLabel="Mật khẩu"
                 />
-                <Pressable onPress={() => setShowPassword((prev) => !prev)} hitSlop={8}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.eyeToggleBtn,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  hitSlop={TouchTarget.hitSlop}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'
+                  }>
                   <Ionicons
                     name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={19}
-                    color={Palette.textMuted}
+                    size={IconSize.md}
+                    color={Palette.textSecondary}
                   />
                 </Pressable>
               </View>
             </View>
 
-            <Pressable style={styles.primaryButton} onPress={handleSubmit}>
-              <Text style={styles.primaryButtonText}>
-                {isRegisterMode ? 'Đăng ký & Khám phá ngay' : 'Đăng nhập vào ReTrip'}
+            <Pressable
+              style={({ pressed }) => [
+                styles.submitButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleSubmit}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isRegisterMode ? 'Đăng ký và bắt đầu' : 'Đăng nhập vào ReTrip'
+              }>
+              <Text style={styles.submitButtonText}>
+                {isRegisterMode ? 'Khởi tạo Sổ tay Hành trình' : 'Mở Sổ tay Hành trình'}
               </Text>
-              <Feather name="arrow-right" size={18} color={Palette.textInverse} />
+              <Feather name="arrow-right" size={IconSize.md} color={Palette.surface} />
             </Pressable>
 
-            <Pressable style={styles.demoBypassBtn} onPress={handleSubmit}>
-              <Ionicons name="flash" size={16} color={Palette.indigo600} />
-              <Text style={styles.demoBypassText}>
-                Vào nhanh chế độ Demo Bảo vệ Đồ án (Tài khoản mẫu)
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickDemoButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleSubmit}
+              accessibilityRole="button"
+              accessibilityLabel="Trải nghiệm ngay với dữ liệu mẫu">
+              <Ionicons name="sparkles" size={IconSize.sm} color={Palette.teal700} />
+              <Text style={styles.quickDemoButtonText}>
+                Trải nghiệm ngay với Ấn phẩm Mẫu (Vũng Tàu & Đà Lạt)
               </Text>
             </Pressable>
           </View>
@@ -179,107 +260,93 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
-    gap: 20,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.sm,
+    paddingBottom: 48,
+    gap: Spacing.xl,
   },
   topNav: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  backPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  backCircleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: Palette.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...Shadows.subtle,
   },
-  backPillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Palette.textPrimary,
-  },
-  heroBanner: {
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: 4,
-  },
-  logoCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
-    backgroundColor: Palette.teal600,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-    ...Shadows.floating,
-  },
-  brandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Palette.indigo50,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
-  },
-  brandBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.indigo600,
-  },
-  heroTitle: {
-    fontSize: 26,
+  topIssueText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: Palette.textPrimary,
-    textAlign: 'center',
-    letterSpacing: -0.4,
+    color: Palette.teal700,
+    letterSpacing: 1.1,
   },
-  heroSubtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: Palette.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 8,
+  lightCoverCard: {
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.hero,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: Palette.teal100,
+    ...Shadows.card,
   },
-  featurePillsRow: {
+  postcardStripRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  featurePill: {
-    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: Palette.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.border,
+    gap: Spacing.sm,
   },
-  featurePillText: {
-    fontSize: 11,
+  postcardFrame: {
+    flex: 1,
+    height: 98,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: Palette.bgSecondary,
+  },
+  postcardFrameCenter: {
+    height: 112,
+    borderColor: Palette.teal500,
+  },
+  postcardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverTextBlock: {
+    gap: 6,
+  },
+  coverBrandTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 32,
     fontWeight: '700',
+    color: Palette.teal700,
+    letterSpacing: -0.6,
+  },
+  coverSerifHeadline: {
+    fontFamily: SERIF_FONT,
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 29,
+    color: Palette.textPrimary,
+  },
+  coverDescription: {
+    fontSize: 13,
+    lineHeight: 19,
     color: Palette.textSecondary,
   },
-  authCard: {
+  formCard: {
     backgroundColor: Palette.surface,
-    borderRadius: Radius.cardLg,
-    padding: 22,
+    borderRadius: Radius.hero,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
     borderWidth: 1,
     borderColor: Palette.border,
-    gap: 16,
     ...Shadows.card,
   },
   segmentedControl: {
@@ -288,81 +355,88 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     padding: 4,
   },
-  segmentTab: {
+  segmentButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: Radius.pill,
+    minHeight: 40,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.pill,
   },
-  segmentTabActive: {
-    backgroundColor: Palette.surface,
-    ...Shadows.subtle,
+  segmentButtonActive: {
+    backgroundColor: Palette.teal700,
   },
-  segmentTabText: {
+  segmentButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Palette.textSubtle,
-  },
-  segmentTabTextActive: {
-    color: Palette.textPrimary,
     fontWeight: '700',
+    color: Palette.textSecondary,
+  },
+  segmentButtonTextActive: {
+    color: Palette.surface,
   },
   fieldGroup: {
-    gap: 7,
+    gap: 6,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Palette.textPrimary,
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.textSubtle,
+    letterSpacing: 0.8,
   },
-  inputWrapper: {
+  inputRow: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    backgroundColor: Palette.bgPrimary,
     borderWidth: 1,
     borderColor: Palette.border,
-    borderRadius: Radius.input,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: Palette.bgPrimary,
   },
-  input: {
+  textInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '600',
     color: Palette.textPrimary,
-    paddingVertical: 0,
+    paddingVertical: 10,
   },
-  primaryButton: {
+  eyeToggleBtn: {
+    padding: 4,
+  },
+  submitButton: {
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Palette.teal600,
+    gap: Spacing.sm,
+    backgroundColor: Palette.teal700,
     borderRadius: Radius.pill,
-    paddingVertical: 15,
     marginTop: 4,
-    ...Shadows.subtle,
+    ...Shadows.floating,
   },
-  primaryButtonText: {
-    color: Palette.textInverse,
-    fontSize: 15,
-    fontWeight: '700',
+  submitButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Palette.surface,
   },
-  demoBypassBtn: {
+  quickDemoButton: {
+    minHeight: TouchTarget.minSize,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: Palette.indigo50,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
+    backgroundColor: Palette.teal50,
     borderRadius: Radius.pill,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
+    paddingHorizontal: Spacing.md,
   },
-  demoBypassText: {
-    color: Palette.indigo600,
+  quickDemoButtonText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: Palette.teal700,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

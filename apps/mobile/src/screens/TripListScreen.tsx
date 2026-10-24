@@ -4,17 +4,33 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Palette, Radius, Shadows } from '@/constants/designSystem';
+import { HeroTripCard } from '@/components/ui';
 import { getTrips } from '@/services/mockApi';
+import {
+  IconSize,
+  Palette,
+  Radius,
+  SERIF_FONT,
+  Shadows,
+  Spacing,
+  TouchTarget,
+} from '@/theme';
 import { TripSummary } from '@/types/trip';
+
+const QUICK_AI_PROMPTS = [
+  'hoàng hôn trên biển',
+  'món ăn hải sản địa phương',
+  'ngọn hải đăng trên đồi',
+  'rừng thông sương mù Đà Lạt',
+];
 
 function computeDaysBetween(startDate: string, endDate: string, fallback?: number): number {
   if (fallback && fallback > 0) return fallback;
@@ -56,91 +72,166 @@ export default function TripListScreen() {
     return { totalTrips, totalStops, totalPhotos };
   }, [trips]);
 
+  const handleOpenTimeline = useCallback((tripId: string) => {
+    router.push({ pathname: '/trips/[tripId]', params: { tripId } });
+  }, []);
+
+  const handleAddPhotos = useCallback((tripId: string) => {
+    router.push({ pathname: '/upload', params: { tripId } });
+  }, []);
+
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      {/* Top Personalized Greeting + Account Button */}
-      <View style={styles.greetingRow}>
-        <View style={styles.greetingLeft}>
-          <View style={styles.brandTagRow}>
-            <Ionicons name="compass" size={15} color={Palette.teal600} />
-            <Text style={styles.brandTagText}>RETRIP • AUTO-INDEX TRAVELOG</Text>
+      {/* Editorial Magazine Masthead */}
+      <View style={styles.mastheadRow}>
+        <View style={styles.brandBlock}>
+          <View style={styles.issueEyebrowRow}>
+            <View style={styles.brandAccentDot} />
+            <Text style={styles.issueEyebrowText}>RETRIP ARCHIVE • ẤN PHẨM 2026</Text>
           </View>
-          <Text style={styles.greetingTitle}>Khám phá Hành trình</Text>
-          <Text style={styles.greetingSub}>
-            Xin chào, chúc bạn một chuyến đi ngập tràn kỷ niệm!
-          </Text>
+          <Text style={styles.brandLogoTitle}>ReTrip.</Text>
         </View>
 
-        <Pressable style={styles.avatarButton} onPress={() => router.push('/auth')}>
-          <Ionicons name="person-circle-outline" size={24} color={Palette.teal600} />
-          <Text style={styles.avatarBtnText}>Tài khoản</Text>
-        </Pressable>
+        <View style={styles.mastheadActions}>
+          <Pressable
+            style={({ pressed }) => [styles.studioImportPill, pressed && styles.pressed]}
+            onPress={() => handleAddPhotos('trip_123')}
+            accessibilityRole="button"
+            accessibilityLabel="Tạo hành trình mới từ thư viện ảnh EXIF">
+            <Feather name="plus" size={IconSize.sm} color={Palette.surface} />
+            <Text style={styles.studioImportPillText}>Nhập ảnh</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.avatarCircleBtn, pressed && styles.pressed]}
+            onPress={() => router.push('/auth')}
+            accessibilityRole="button"
+            accessibilityLabel="Mở trang Hồ sơ & Tài khoản">
+            <Ionicons name="person-outline" size={IconSize.md} color={Palette.teal700} />
+          </Pressable>
+        </View>
       </View>
 
-      {/* AI Semantic Search Spotlight Banner (Indigo Violet) */}
-      <Pressable style={styles.aiSearchSpotlight} onPress={() => router.push('/search')}>
-        <View style={styles.aiIconCircle}>
-          <Ionicons name="sparkles" size={20} color={Palette.textInverse} />
-        </View>
-        <View style={styles.aiSpotlightBody}>
-          <View style={styles.aiSpotlightTitleRow}>
-            <Text style={styles.aiSpotlightTitle}>Tìm kiếm AI Ngữ nghĩa (CLIP)</Text>
-            <View style={styles.aiPillBadge}>
-              <Text style={styles.aiPillBadgeText}>pgvector</Text>
+      {/* Editorial Quote / Tagline */}
+      <View style={styles.editorialIntroBlock}>
+        <Text style={styles.editorialDisplayQuote}>
+          Mỗi bức ảnh là một tọa độ ký ức sống động.
+        </Text>
+        <Text style={styles.editorialLeadBody}>
+          Tự động gom cụm điểm dừng theo không gian - thời gian và tìm lại khoảnh khắc bằng
+          ngôn ngữ tự nhiên.
+        </Text>
+      </View>
+
+      {/* Luminous Lavender-Indigo AI Visual Search Spotlight Card (Light Theme) */}
+      <View style={styles.lightSpotlightCard}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.spotlightSearchTrigger,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => router.push('/search')}
+          accessibilityRole="button"
+          accessibilityLabel="Mở Tìm kiếm ảnh bằng ngôn ngữ tự nhiên AI CLIP">
+          <View style={styles.spotlightIconBadge}>
+            <Ionicons name="sparkles" size={IconSize.md} color={Palette.indigo600} />
+          </View>
+          <View style={styles.spotlightPromptCol}>
+            <Text style={styles.spotlightPromptLabel}>Tìm kiếm</Text>
+            <Text style={styles.spotlightPromptPlaceholder} numberOfLines={1}>
+              &ldquo;hoàng hôn trên biển&rdquo;, &ldquo;hải sản địa phương&rdquo;...
+            </Text>
+          </View>
+          <View style={styles.spotlightGoCircle}>
+            <Feather name="search" size={IconSize.sm} color={Palette.surface} />
+          </View>
+        </Pressable>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickPromptsRow}>
+          {QUICK_AI_PROMPTS.map((prompt) => (
+            <Pressable
+              key={prompt}
+              style={({ pressed }) => [
+                styles.quickPromptChip,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => router.push('/search')}
+              accessibilityRole="button"
+              accessibilityLabel={`Tìm nhanh: ${prompt}`}>
+              <Ionicons name="sparkles-outline" size={11} color={Palette.indigo600} />
+              <Text style={styles.quickPromptChipText}>{prompt}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Asymmetric Editorial Bento Grid (100% Unified Light Theme) */}
+      <View style={styles.bentoGridContainer}>
+        {/* Left Tall Feature Bento Card (Soft Coastal Mint-Teal Light Card) */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.bentoLeftPrimaryCard,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => handleAddPhotos('trip_123')}
+          accessibilityRole="button"
+          accessibilityLabel="Tái dựng hành trình mới từ ảnh có EXIF">
+          <View style={styles.bentoLeftTopRow}>
+            <View style={styles.bentoTealIconWrap}>
+              <Ionicons name="compass" size={IconSize.lg} color={Palette.teal700} />
             </View>
           </View>
-          <Text style={styles.aiSpotlightSub} numberOfLines={1}>
-            Thử tìm: &ldquo;hoàng hôn trên biển&rdquo;, &ldquo;món ăn hải sản&rdquo;...
-          </Text>
-        </View>
-        <Feather name="chevron-right" size={20} color={Palette.indigo600} />
-      </Pressable>
 
-      {/* Bento Overview Summary Card */}
-      <View style={styles.bentoSummaryCard}>
-        <View style={styles.bentoStatItem}>
-          <View style={[styles.bentoIconWrap, { backgroundColor: Palette.teal50 }]}>
-            <Ionicons name="map-outline" size={18} color={Palette.teal600} />
+          <View style={styles.bentoLeftBottomBlock}>
+            <Text style={styles.bentoBigSerifNumber}>
+              {String(summaryStats.totalTrips).padStart(2, '0')}
+            </Text>
+            <Text style={styles.bentoLeftTitle}>Chuyến đi đã tái dựng</Text>
+            <View style={styles.bentoLeftSubLink}>
+              <Text style={styles.bentoLeftSubLinkText}>Tạo chuyến mới</Text>
+              <Feather name="arrow-right" size={12} color={Palette.teal700} />
+            </View>
           </View>
-          <Text style={styles.bentoStatValue}>{summaryStats.totalTrips}</Text>
-          <Text style={styles.bentoStatLabel}>Chuyến đi</Text>
-        </View>
+        </Pressable>
 
-        <View style={styles.bentoDivider} />
-
-        <View style={styles.bentoStatItem}>
-          <View style={[styles.bentoIconWrap, { backgroundColor: Palette.coral50 }]}>
-            <Ionicons name="location-outline" size={18} color={Palette.coral500} />
+        {/* Right Stacked Bento Column */}
+        <View style={styles.bentoRightStack}>
+          <View style={styles.bentoSmallCard}>
+            <View style={styles.bentoSmallTopRow}>
+              <View style={[styles.bentoSmallIconCircle, styles.coralCircle]}>
+                <Ionicons name="location" size={IconSize.sm} color={Palette.coral600} />
+              </View>
+            </View>
+            <Text style={styles.bentoSmallNumber}>{summaryStats.totalStops}</Text>
+            <Text style={styles.bentoSmallLabel}>Điểm dừng trên bản đồ</Text>
           </View>
-          <Text style={styles.bentoStatValue}>{summaryStats.totalStops}</Text>
-          <Text style={styles.bentoStatLabel}>Điểm dừng</Text>
-        </View>
 
-        <View style={styles.bentoDivider} />
-
-        <View style={styles.bentoStatItem}>
-          <View style={[styles.bentoIconWrap, { backgroundColor: Palette.indigo50 }]}>
-            <Ionicons name="images-outline" size={18} color={Palette.indigo600} />
-          </View>
-          <Text style={styles.bentoStatValue}>{summaryStats.totalPhotos}</Text>
-          <Text style={styles.bentoStatLabel}>Ảnh đã Index</Text>
+          <Pressable
+            style={({ pressed }) => [styles.bentoSmallCard, pressed && styles.pressed]}
+            onPress={() => router.push('/search')}
+            accessibilityRole="button"
+            accessibilityLabel="Xem kho ảnh đã lưu">
+            <View style={styles.bentoSmallTopRow}>
+              <View style={[styles.bentoSmallIconCircle, styles.indigoCircle]}>
+                <Ionicons name="sparkles" size={IconSize.sm} color={Palette.indigo600} />
+              </View>
+            </View>
+            <Text style={styles.bentoSmallNumber}>{summaryStats.totalPhotos}</Text>
+            <Text style={styles.bentoSmallLabel}>Khoảnh khắc đã lưu</Text>
+          </Pressable>
         </View>
       </View>
 
-      {/* Quick Action Bar: Upload & Create Trip */}
-      <View style={styles.sectionHeaderRow}>
+      {/* Magazine Issues Section Header */}
+      <View style={styles.magazineSectionHeader}>
         <View>
-          <Text style={styles.sectionTitle}>Hành trình đã tái dựng</Text>
-          <Text style={styles.sectionSubtitle}>
-            Chạm vào thẻ chuyến đi để mở Bản đồ & Timeline tương tác
-          </Text>
+          <Text style={styles.magazineSectionKicker}>ẤN PHẨM HÀNH TRÌNH</Text>
+          <Text style={styles.magazineSectionTitle}>Nhật ký Chuyến đi</Text>
         </View>
-        <Pressable
-          style={styles.newUploadBtn}
-          onPress={() => router.push({ pathname: '/upload', params: { tripId: 'trip_123' } })}>
-          <Feather name="plus-circle" size={15} color={Palette.textInverse} />
-          <Text style={styles.newUploadBtnText}>Tải ảnh EXIF</Text>
-        </Pressable>
+        <Text style={styles.magazineSectionCount}>{trips.length} chương</Text>
       </View>
     </View>
   );
@@ -148,116 +239,76 @@ export default function TripListScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       {loading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={Palette.teal600} />
-          <Text style={styles.loadingText}>Đang đồng bộ danh sách chuyến đi...</Text>
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={Palette.teal700} />
+          <Text style={styles.loadingStateText}>
+            Đang mở ấn phẩm hành trình của bạn...
+          </Text>
         </View>
       ) : (
-        <FlatList
-          data={trips}
-          keyExtractor={(item) => item.trip_id}
-          ListHeaderComponent={renderHeader}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const daysCount = computeDaysBetween(
-              item.start_date,
-              item.end_date,
-              item.days_count
-            );
+        <View style={styles.flexContainer}>
+          <FlatList
+            data={trips}
+            keyExtractor={(item) => item.trip_id}
+            ListHeaderComponent={renderHeader}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item, index }) => (
+              <HeroTripCard
+                trip={item}
+                issueNumber={index + 1}
+                daysCount={computeDaysBetween(
+                  item.start_date,
+                  item.end_date,
+                  item.days_count
+                )}
+                onOpenTimeline={handleOpenTimeline}
+                onAddPhotos={handleAddPhotos}
+              />
+            )}
+          />
 
-            return (
+          {/* Floating Frosted White Bottom Navigation Dock (Light Theme) */}
+          <View style={styles.floatingDockWrapper}>
+            <View style={styles.floatingLightDock}>
               <Pressable
-                style={styles.magazineCard}
-                onPress={() =>
-                  router.push({ pathname: '/trips/[tripId]', params: { tripId: item.trip_id } })
-                }>
-                {/* Ảnh bìa lớn Magazine Hero */}
-                <View style={styles.heroImageContainer}>
-                  {item.cover_thumbnail_url ? (
-                    <Image
-                      source={{ uri: item.cover_thumbnail_url }}
-                      style={styles.heroImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.heroFallbackBg}>
-                      <Ionicons name="image-outline" size={42} color={Palette.textMuted} />
-                    </View>
-                  )}
-
-                  {/* Top Floating Badges trên ảnh bìa */}
-                  <View style={styles.heroTopRow}>
-                    <View style={styles.verifiedGpsPill}>
-                      <Ionicons name="checkmark-circle" size={13} color={Palette.emeraldText} />
-                      <Text style={styles.verifiedGpsPillText}>Auto-Indexed</Text>
-                    </View>
-
-                    <View style={styles.tripIdPill}>
-                      <Text style={styles.tripIdPillText}>#{item.trip_id}</Text>
-                    </View>
-                  </View>
-
-                  {/* Lớp nền tối nhẹ ở đáy (Dark Overlay) */}
-                  <View style={styles.heroBottomOverlay}>
-                    <Text style={styles.heroTripTitle} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-
-                    <View style={styles.heroDateRow}>
-                      <Feather name="calendar" size={13} color="#E2E8F0" />
-                      <Text style={styles.heroDateText}>
-                        {item.start_date} → {item.end_date}
-                      </Text>
-                    </View>
-
-                    {/* Các huy hiệu nổi: Số ngày, Số điểm dừng, Số ảnh */}
-                    <View style={styles.heroMetricsRow}>
-                      <View style={styles.heroMetricBadge}>
-                        <Ionicons name="sunny-outline" size={13} color="#5EEAD4" />
-                        <Text style={styles.heroMetricBadgeText}>{daysCount} ngày</Text>
-                      </View>
-                      <View style={styles.heroMetricBadge}>
-                        <Ionicons name="location-outline" size={13} color="#FDA4AF" />
-                        <Text style={styles.heroMetricBadgeText}>
-                          {item.stop_count ?? 0} điểm dừng
-                        </Text>
-                      </View>
-                      <View style={styles.heroMetricBadge}>
-                        <Ionicons name="camera-outline" size={13} color="#C7D2FE" />
-                        <Text style={styles.heroMetricBadgeText}>
-                          {item.photo_count ?? 0} bức ảnh
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Chân thẻ Magazine Card: Các nút hành động nhanh */}
-                <View style={styles.cardFooter}>
-                  <Pressable
-                    style={styles.openTimelineBtn}
-                    onPress={() =>
-                      router.push({ pathname: '/trips/[tripId]', params: { tripId: item.trip_id } })
-                    }>
-                    <Ionicons name="map" size={16} color={Palette.textInverse} />
-                    <Text style={styles.openTimelineBtnText}>Bản đồ & Dòng thời gian</Text>
-                    <Feather name="arrow-up-right" size={16} color={Palette.textInverse} />
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.addPhotosIconBtn}
-                    onPress={() =>
-                      router.push({ pathname: '/upload', params: { tripId: item.trip_id } })
-                    }>
-                    <Ionicons name="cloud-upload-outline" size={18} color={Palette.teal600} />
-                    <Text style={styles.addPhotosIconBtnText}>Thêm ảnh</Text>
-                  </Pressable>
-                </View>
+                style={[styles.dockTabItem, styles.dockTabActive]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: true }}
+                accessibilityLabel="Trang chủ Nhật ký">
+                <Ionicons name="book" size={IconSize.sm} color={Palette.surface} />
+                <Text style={styles.dockTabActiveText}>Nhật ký</Text>
               </Pressable>
-            );
-          }}
-        />
+
+              <Pressable
+                style={({ pressed }) => [styles.dockTabItem, pressed && styles.pressed]}
+                onPress={() => router.push('/search')}
+                accessibilityRole="tab"
+                accessibilityLabel="Mở Tìm kiếm">
+                <Ionicons name="sparkles-outline" size={IconSize.md} color={Palette.indigo600} />
+                <Text style={styles.dockTabInactiveText}>Tìm kiếm</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.dockTabItem, pressed && styles.pressed]}
+                onPress={() => handleAddPhotos('trip_123')}
+                accessibilityRole="tab"
+                accessibilityLabel="Tải ảnh EXIF mới">
+                <Feather name="plus-circle" size={IconSize.md} color={Palette.teal700} />
+                <Text style={styles.dockTabInactiveText}>Tạo mới</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.dockTabItem, pressed && styles.pressed]}
+                onPress={() => router.push('/auth')}
+                accessibilityRole="tab"
+                accessibilityLabel="Mở Tài khoản">
+                <Ionicons name="person-outline" size={IconSize.md} color={Palette.textSecondary} />
+                <Text style={styles.dockTabInactiveText}>Hồ sơ</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -268,336 +319,369 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Palette.bgPrimary,
   },
-  centerBox: {
+  flexContainer: {
+    flex: 1,
+  },
+  loadingState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
-  loadingText: {
+  loadingStateText: {
     fontSize: 14,
     fontWeight: '600',
     color: Palette.textSubtle,
   },
   listContent: {
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 110,
-    gap: 18,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.sm,
+    paddingBottom: 120,
+    gap: Spacing.xxl,
   },
   headerContainer: {
-    gap: 16,
-    marginBottom: 4,
+    gap: Spacing.xl,
+    marginBottom: Spacing.xs,
   },
-  greetingRow: {
+  mastheadRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  greetingLeft: {
-    flex: 1,
-    gap: 3,
-  },
-  brandTagRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
   },
-  brandTagText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Palette.teal600,
-    letterSpacing: 0.6,
+  brandBlock: {
+    gap: 2,
   },
-  greetingTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-    letterSpacing: -0.5,
-  },
-  greetingSub: {
-    fontSize: 13,
-    color: Palette.textSecondary,
-  },
-  avatarButton: {
+  issueEyebrowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadows.subtle,
   },
-  avatarBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.textPrimary,
+  brandAccentDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: Palette.coral600,
   },
-  aiSearchSpotlight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: Palette.indigo50,
-    borderRadius: Radius.card,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
-    ...Shadows.card,
-  },
-  aiIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: Palette.indigo600,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiSpotlightBody: {
-    flex: 1,
-    gap: 3,
-  },
-  aiSpotlightTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  aiSpotlightTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Palette.indigo700,
-  },
-  aiPillBadge: {
-    backgroundColor: Palette.surface,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Palette.indigo100,
-  },
-  aiPillBadgeText: {
+  issueEyebrowText: {
     fontSize: 10,
     fontWeight: '800',
-    color: Palette.indigo600,
+    color: Palette.teal700,
+    letterSpacing: 1.1,
   },
-  aiSpotlightSub: {
-    fontSize: 12,
-    color: Palette.textSecondary,
+  brandLogoTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 34,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+    letterSpacing: -0.8,
   },
-  bentoSummaryCard: {
+  mastheadActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Palette.surface,
-    borderRadius: Radius.card,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    ...Shadows.card,
+    gap: Spacing.sm,
   },
-  bentoStatItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  bentoIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  bentoStatValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-  },
-  bentoStatLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Palette.textSecondary,
-  },
-  bentoDivider: {
-    width: 1,
-    height: 42,
-    backgroundColor: Palette.border,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Palette.textPrimary,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: Palette.textSecondary,
-  },
-  newUploadBtn: {
+  studioImportPill: {
+    minHeight: TouchTarget.compactMinSize,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Palette.teal600,
+    backgroundColor: Palette.teal700,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: Radius.pill,
     ...Shadows.subtle,
   },
-  newUploadBtnText: {
-    color: Palette.textInverse,
+  studioImportPillText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: Palette.surface,
   },
-  magazineCard: {
+  avatarCircleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: Palette.surface,
-    borderRadius: Radius.cardLg,
-    overflow: 'hidden',
     borderWidth: 1,
     borderColor: Palette.border,
-    ...Shadows.card,
-  },
-  heroImageContainer: {
-    height: 225,
-    width: '100%',
-    position: 'relative',
-    backgroundColor: '#1E293B',
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-  },
-  heroFallbackBg: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0F172A',
+    ...Shadows.subtle,
   },
-  heroTopRow: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
+  editorialIntroBlock: {
+    gap: 6,
+  },
+  editorialDisplayQuote: {
+    fontFamily: SERIF_FONT,
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 31,
+    color: Palette.textPrimary,
+    letterSpacing: -0.3,
+  },
+  editorialLeadBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: Palette.textSecondary,
+  },
+  lightSpotlightCard: {
+    backgroundColor: Palette.indigo50,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Palette.indigo100,
+    ...Shadows.card,
+  },
+  spotlightSearchTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.indigo100,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    ...Shadows.subtle,
+  },
+  spotlightIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Palette.indigo50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spotlightPromptCol: {
+    flex: 1,
+    gap: 2,
+  },
+  spotlightPromptLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.indigo600,
+    letterSpacing: 0.8,
+  },
+  spotlightPromptPlaceholder: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.textSecondary,
+  },
+  spotlightGoCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Palette.indigo600,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickPromptsRow: {
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  quickPromptChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.indigo100,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+  },
+  quickPromptChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.indigo700,
+  },
+  bentoGridContainer: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  bentoLeftPrimaryCard: {
+    flex: 1.08,
+    backgroundColor: Palette.teal50,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    justifyContent: 'space-between',
+    minHeight: 196,
+    borderWidth: 1.5,
+    borderColor: Palette.teal100,
+    ...Shadows.card,
+  },
+  bentoLeftTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  verifiedGpsPill: {
-    flexDirection: 'row',
+  bentoTealIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: Palette.emeraldBg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    justifyContent: 'center',
+  },
+  bentoLiveTag: {
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.teal100,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: Radius.pill,
   },
-  verifiedGpsPillText: {
-    fontSize: 11,
+  bentoLiveTagText: {
+    fontSize: 9,
     fontWeight: '800',
-    color: Palette.emeraldText,
+    color: Palette.teal700,
+    letterSpacing: 0.6,
   },
-  tripIdPill: {
-    backgroundColor: Palette.darkOverlayStrong,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
+  bentoLeftBottomBlock: {
+    gap: 4,
+    marginTop: Spacing.lg,
   },
-  tripIdPillText: {
-    fontSize: 11,
+  bentoBigSerifNumber: {
+    fontFamily: SERIF_FONT,
+    fontSize: 42,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: Palette.teal800,
+    lineHeight: 46,
   },
-  heroBottomOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Palette.darkOverlayStrong,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
-    gap: 6,
-  },
-  heroTripTitle: {
-    fontSize: 20,
+  bentoLeftTitle: {
+    fontSize: 13,
     fontWeight: '800',
-    color: Palette.textInverse,
-    letterSpacing: -0.3,
+    color: Palette.textPrimary,
   },
-  heroDateRow: {
+  bentoLeftSubLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  heroDateText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#E2E8F0',
-  },
-  heroMetricsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 4,
     marginTop: 4,
   },
-  heroMetricBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
+  bentoLeftSubLinkText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Palette.teal700,
   },
-  heroMetricBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Palette.textInverse,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    backgroundColor: Palette.surface,
-  },
-  openTimelineBtn: {
+  bentoRightStack: {
     flex: 1,
+    gap: Spacing.md,
+  },
+  bentoSmallCard: {
+    flex: 1,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    justifyContent: 'space-between',
+    ...Shadows.subtle,
+  },
+  bentoSmallTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bentoSmallIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coralCircle: {
+    backgroundColor: Palette.coral50,
+  },
+  indigoCircle: {
+    backgroundColor: Palette.indigo50,
+  },
+  bentoSmallCaption: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Palette.textMuted,
+  },
+  bentoSmallNumber: {
+    fontFamily: SERIF_FONT,
+    fontSize: 24,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+    marginTop: 2,
+  },
+  bentoSmallLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Palette.textSecondary,
+  },
+  magazineSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 4,
+  },
+  magazineSectionKicker: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Palette.teal700,
+    letterSpacing: 1,
+  },
+  magazineSectionTitle: {
+    fontFamily: SERIF_FONT,
+    fontSize: 23,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+    marginTop: 2,
+  },
+  magazineSectionCount: {
+    fontFamily: SERIF_FONT,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Palette.textSubtle,
+  },
+  floatingDockWrapper: {
+    position: 'absolute',
+    bottom: Spacing.lg,
+    left: Spacing.xl,
+    right: Spacing.xl,
+    alignItems: 'center',
+  },
+  floatingLightDock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderRadius: Radius.pill,
+    padding: 6,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: Palette.border,
+    ...Shadows.floating,
+  },
+  dockTabItem: {
+    flex: 1,
+    minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Palette.teal600,
-    paddingVertical: 12,
+    gap: 5,
     borderRadius: Radius.pill,
+    paddingHorizontal: 8,
   },
-  openTimelineBtnText: {
-    color: Palette.textInverse,
-    fontSize: 13,
+  dockTabActive: {
+    backgroundColor: Palette.teal700,
+  },
+  dockTabActiveText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Palette.surface,
+  },
+  dockTabInactiveText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: Palette.textSecondary,
   },
-  addPhotosIconBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Palette.teal50,
-    borderWidth: 1,
-    borderColor: Palette.teal100,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: Radius.pill,
-  },
-  addPhotosIconBtnText: {
-    color: Palette.teal700,
-    fontSize: 13,
-    fontWeight: '700',
+  pressed: {
+    opacity: 0.78,
   },
 });
